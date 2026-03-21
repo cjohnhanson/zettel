@@ -1,0 +1,15 @@
+[package]
+name = "zettel"
+version = "0.1.0"
+edition = "2024"
+description = "Zettelkasten note management on frontmattered markdown"
+
+[dependencies]
+camino = { version = "1", features = ["serde1"] }
+clap = { version = "4", features = ["derive", "env", "unicode", "wrap_help"] }
+mdstore = { path = "../mdstore" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yml = "0.0"
+thiserror = "2"
+chrono = { version = "0.4", features = ["serde"] }
