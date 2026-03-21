@@ -1,0 +1,5 @@
+#!/bin/sh
+# Compare note markdown files, ignoring created/updated timestamps
+a=$(grep -v '^created:' "$1" | grep -v '^updated:')
+b=$(grep -v '^created:' "$2" | grep -v '^updated:')
+test "$a" = "$b"

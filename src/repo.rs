@@ -361,6 +361,7 @@ impl Repo {
                     || prefix
                         .as_ref()
                         .is_some_and(|p| link == p)
+                    || self.resolve_id(link).ok().as_deref() == Some(&resolved)
             });
 
             // Also check for [[id]] references in the body
@@ -392,6 +393,7 @@ impl Repo {
                             || extract_prefix(&n.id)
                                 .map(|(p, _)| p)
                                 .is_some_and(|p| l == p)
+                            || self.resolve_id(l).ok().as_deref() == Some(n.id.as_str())
                     }) || body_contains_link(
                         &other.body,
                         &n.id,

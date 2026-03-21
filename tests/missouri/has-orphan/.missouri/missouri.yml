@@ -1,0 +1,7 @@
+assertions:
+  - name: "three notes exist"
+    command: "test $(zettel note list --format json | jq 'length') -eq 3"
+  - name: "orphan detected"
+    command: "zettel orphans | grep -q 'Unrelated thought'"
+  - name: "linked notes are not orphans"
+    command: "test $(zettel orphans | wc -l) -eq 1"

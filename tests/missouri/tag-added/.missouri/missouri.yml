@@ -1,0 +1,18 @@
+transitions:
+  - name: "remove tag"
+    command: "zettel note edit attention-is-not-explanation --remove-tag ml"
+    target: "../tag-removed"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+
+assertions:
+  - name: "tag was added"
+    command: "zettel note show attention-is-not-explanation --field tags"
+    stdout: "ml, interpretability, transformers\n"
+  - name: "filter by new tag"
+    command: "zettel note list --tag transformers | grep -q 'Attention is not explanation'"
+  - name: "filter by nonexistent tag is empty"
+    command: "zettel note list --tag nonexistent"
+    stdout: ""

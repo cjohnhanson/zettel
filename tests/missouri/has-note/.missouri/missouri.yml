@@ -1,0 +1,66 @@
+transitions:
+  - name: "edit note title"
+    command: "zettel note edit attention-is-not-explanation --title 'Attention mechanisms revisited'"
+    target: "../note-edited"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "add tag"
+    command: "zettel note edit attention-is-not-explanation --add-tag transformers"
+    target: "../tag-added"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "create second note with link"
+    command: "zettel note create 'Transformer architecture' -t ml,architecture -l attention-is-not-explanation"
+    target: "../note-with-links"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "delete note"
+    command: "zettel note delete attention-is-not-explanation"
+    target: "../note-deleted"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+
+assertions:
+  - name: "note list shows note"
+    command: "zettel note list | grep -q 'Attention is not explanation'"
+  - name: "note list shows tags"
+    command: "zettel note list | grep -q 'ml, interpretability'"
+  - name: "note show has title"
+    command: "zettel note show attention-is-not-explanation | grep -q 'Attention is not explanation'"
+  - name: "note show field title"
+    command: "zettel note show attention-is-not-explanation --field title"
+    stdout: "Attention is not explanation\n"
+  - name: "note show field tags"
+    command: "zettel note show attention-is-not-explanation --field tags"
+    stdout: "ml, interpretability\n"
+  - name: "note show field links"
+    command: "zettel note show attention-is-not-explanation --field links"
+    stdout: "\n"
+  - name: "note show format json is valid"
+    command: "zettel note show attention-is-not-explanation --format json | jq -e '.title'"
+  - name: "note show json has correct title"
+    command: "zettel note show attention-is-not-explanation --format json | jq -r '.title'"
+    stdout: "Attention is not explanation\n"
+  - name: "note show json has tags"
+    command: "zettel note show attention-is-not-explanation --format json | jq -r '.tags | join(\", \")'"
+    stdout: "ml, interpretability\n"
+  - name: "note list format json is valid array"
+    command: "zettel note list --format json | jq -e 'type == \"array\"'"
+  - name: "note list json has one note"
+    command: "test $(zettel note list --format json | jq 'length') -eq 1"
+  - name: "note is an orphan"
+    command: "zettel orphans | grep -q 'Attention is not explanation'"
+  - name: "backlinks are empty"
+    command: "zettel backlinks attention-is-not-explanation"
+    stdout: ""
+  - name: "duplicate slug rejected"
+    command: "zettel note create 'Attention is not explanation'"
+    should_fail: true

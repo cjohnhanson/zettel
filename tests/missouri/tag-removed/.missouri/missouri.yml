@@ -1,0 +1,4 @@
+assertions:
+  - name: "ml tag was removed"
+    command: "zettel note show attention-is-not-explanation --field tags"
+    stdout: "interpretability, transformers\n"

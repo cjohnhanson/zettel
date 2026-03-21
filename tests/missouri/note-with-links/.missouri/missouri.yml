@@ -1,0 +1,26 @@
+transitions:
+  - name: "create orphan note"
+    command: "zettel note create 'Unrelated thought' -t random"
+    target: "../has-orphan"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+
+assertions:
+  - name: "two notes exist"
+    command: "test $(zettel note list --format json | jq 'length') -eq 2"
+  - name: "backlinks to first note show second"
+    command: "zettel backlinks attention-is-not-explanation | grep -q 'Transformer architecture'"
+  - name: "backlinks to second note are empty"
+    command: "zettel backlinks transformer-architecture"
+    stdout: ""
+  - name: "no orphans when notes are linked"
+    command: "zettel orphans"
+    stdout: ""
+  - name: "show second note has link in frontmatter"
+    command: "zettel note show transformer-architecture --field links | grep -q 'attention-is-not-explanation'"
+  - name: "backlinks format json is valid"
+    command: "zettel backlinks attention-is-not-explanation --format json | jq -e 'type == \"array\"'"
+  - name: "backlinks json has one entry"
+    command: "test $(zettel backlinks attention-is-not-explanation --format json | jq 'length') -eq 1"

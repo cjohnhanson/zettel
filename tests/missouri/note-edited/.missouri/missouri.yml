@@ -1,0 +1,7 @@
+assertions:
+  - name: "title was updated"
+    command: "zettel note show attention-is-not-explanation --field title"
+    stdout: "Attention mechanisms revisited\n"
+  - name: "tags preserved"
+    command: "zettel note show attention-is-not-explanation --field tags"
+    stdout: "ml, interpretability\n"

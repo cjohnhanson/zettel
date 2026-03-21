@@ -1,0 +1,18 @@
+transitions:
+  - name: "zettel init"
+    command: "zettel init"
+    target: "../initialized"
+
+assertions:
+  - name: "note list fails before init"
+    command: "zettel note list"
+    should_fail: true
+    stderr: "error: not a zettel repository (zettel.yml not found)\n"
+  - name: "backlinks fails before init"
+    command: "zettel backlinks foo"
+    should_fail: true
+    stderr: "error: not a zettel repository (zettel.yml not found)\n"
+  - name: "orphans fails before init"
+    command: "zettel orphans"
+    should_fail: true
+    stderr: "error: not a zettel repository (zettel.yml not found)\n"

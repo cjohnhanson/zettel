@@ -1,0 +1,9 @@
+setup:
+  - name: "build zettel"
+    command: "cargo build --quiet --manifest-path ../../Cargo.toml"
+
+packages:
+  - jq
+
+env:
+  NO_COLOR: "1"

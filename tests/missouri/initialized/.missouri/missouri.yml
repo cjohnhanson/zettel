@@ -1,0 +1,31 @@
+transitions:
+  - name: "create note"
+    command: "zettel note create 'Attention is not explanation' -t ml,interpretability"
+    target: "../has-note"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+
+assertions:
+  - name: "note list is empty"
+    command: "zettel note list"
+    stdout: ""
+  - name: "orphans is empty"
+    command: "zettel orphans"
+    stdout: ""
+  - name: "init when already initialized fails"
+    command: "zettel init"
+    should_fail: true
+    stderr: "error: already initialized (zettel.yml exists)\n"
+  - name: "create note without title fails"
+    command: "zettel note create"
+    should_fail: true
+  - name: "show nonexistent note fails"
+    command: "zettel note show foo"
+    should_fail: true
+    stderr: "error: note 'foo' not found\n"
+  - name: "delete nonexistent note fails"
+    command: "zettel note delete foo"
+    should_fail: true
+    stderr: "error: note 'foo' not found\n"

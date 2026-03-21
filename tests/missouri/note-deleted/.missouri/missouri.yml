@@ -1,0 +1,8 @@
+assertions:
+  - name: "note list is empty after delete"
+    command: "zettel note list"
+    stdout: ""
+  - name: "show deleted note fails"
+    command: "zettel note show attention-is-not-explanation"
+    should_fail: true
+    stderr: "error: note 'attention-is-not-explanation' not found\n"
