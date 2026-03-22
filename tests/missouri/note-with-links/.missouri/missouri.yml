@@ -6,6 +6,13 @@ transitions:
       files:
         - path: ".zettel/"
           ignore: true
+  - name: "create third note for chain"
+    command: "zettel note create 'Self-attention mechanism' -t ml,attention -l transformer-architecture"
+    target: "../has-chain"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
 
 assertions:
   - name: "two notes exist"

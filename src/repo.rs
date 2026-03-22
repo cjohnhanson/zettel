@@ -612,14 +612,24 @@ pub struct Stats {
 }
 
 /// Check if a markdown body contains a `[[ref]]` link to the given ID.
+/// Matches against full ID, 4-char prefix, or slug portion.
 fn body_contains_link(body: &str, full_id: &str, prefix: Option<&str>) -> bool {
+    // [[full-id]]
     let full_ref = format!("[[{full_id}]]");
     if body.contains(&full_ref) {
         return true;
     }
+    // [[prefix]]
     if let Some(p) = prefix {
         let prefix_ref = format!("[[{p}]]");
         if body.contains(&prefix_ref) {
+            return true;
+        }
+    }
+    // [[slug]] (the part after the prefix)
+    if let Some((_, slug)) = extract_prefix(full_id) {
+        let slug_ref = format!("[[{slug}]]");
+        if body.contains(&slug_ref) {
             return true;
         }
     }

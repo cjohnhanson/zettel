@@ -34,6 +34,13 @@ transitions:
       files:
         - path: ".zettel/"
           ignore: true
+  - name: "create note with body link only"
+    command: "zettel note create 'Body link test' -t test -b 'References [[attention-is-not-explanation]] in body only.'"
+    target: "../has-body-link"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
 
 assertions:
   - name: "note list shows note"
@@ -91,6 +98,12 @@ assertions:
   - name: "search no match"
     command: "zettel search 'nonexistent'"
     stdout: ""
+  - name: "search json format is valid"
+    command: "zettel search 'Attention' --format json | jq -e 'type == \"array\"'"
+  - name: "search json has matched_fields"
+    command: "zettel search 'Attention' --format json | jq -e '.[0].matched_fields'"
+  - name: "search json includes title in matched fields"
+    command: "zettel search 'Attention' --format json | jq -e '.[0].matched_fields | index(\"title\")'"
   - name: "read shows full content"
     command: "zettel read --tag ml | grep -q 'Attention is not explanation'"
   - name: "read by status"
