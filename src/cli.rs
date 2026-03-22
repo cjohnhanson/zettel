@@ -1,7 +1,7 @@
 use camino::Utf8PathBuf;
 use clap::Parser;
 
-use crate::{CreateNoteOptions, EditNoteOptions, Note, Repo};
+use crate::{CreateNoteOptions, EditNoteOptions, ListNotesFilter, Note, Repo};
 
 #[derive(Parser)]
 #[command(
@@ -33,6 +33,18 @@ pub enum Command {
 
     /// Show orphaned notes (no links in or out)
     Orphans,
+
+    /// Search notes by regex pattern
+    Search(SearchArgs),
+
+    /// Read full content of matching notes
+    Read(ReadArgs),
+
+    /// Show a note and its neighborhood (linked notes within N hops)
+    Context(ContextArgs),
+
+    /// Show knowledge base statistics
+    Stats,
 }
 
 #[derive(Parser)]
@@ -69,6 +81,10 @@ pub struct NoteCreateArgs {
     /// Note body text (inline)
     #[arg(short, long)]
     pub body: Option<String>,
+
+    /// Initial status (default: draft)
+    #[arg(short, long)]
+    pub status: Option<String>,
 }
 
 #[derive(Parser)]
@@ -76,6 +92,10 @@ pub struct NoteListArgs {
     /// Filter by tag
     #[arg(short, long)]
     pub tag: Option<String>,
+
+    /// Filter by status (draft or permanent)
+    #[arg(short, long)]
+    pub status: Option<String>,
 
     /// Output format (text or json)
     #[arg(long, default_value = "text")]
@@ -110,6 +130,10 @@ pub struct NoteEditArgs {
     /// New title
     #[arg(long)]
     pub title: Option<String>,
+
+    /// New status (draft or permanent)
+    #[arg(short, long)]
+    pub status: Option<String>,
 
     /// New tags (replaces existing)
     #[arg(short, long)]
@@ -160,6 +184,41 @@ pub struct BacklinksArgs {
     pub format: OutputFormat,
 }
 
+#[derive(Parser)]
+pub struct SearchArgs {
+    /// Search pattern (regex supported)
+    pub pattern: String,
+
+    /// Output format (text or json)
+    #[arg(long, default_value = "text")]
+    pub format: OutputFormat,
+}
+
+#[derive(Parser)]
+pub struct ReadArgs {
+    /// Filter by tag
+    #[arg(short, long)]
+    pub tag: Option<String>,
+
+    /// Filter by status (draft or permanent)
+    #[arg(short, long)]
+    pub status: Option<String>,
+}
+
+#[derive(Parser)]
+pub struct ContextArgs {
+    /// Note ID to explore from
+    pub id: String,
+
+    /// Maximum link depth to traverse (default: 2)
+    #[arg(short, long, default_value = "2")]
+    pub depth: usize,
+
+    /// Output format (text or json)
+    #[arg(long, default_value = "text")]
+    pub format: OutputFormat,
+}
+
 /// Run zettel with the given arguments.
 pub fn run(args: Args) -> crate::Result<()> {
     let root = if args.root.is_relative() {
@@ -178,19 +237,31 @@ pub fn run(args: Args) -> crate::Result<()> {
             let repo = Repo::open(&root)?;
             match cmd {
                 NoteCommand::Create(a) => {
+                    let status = a
+                        .status
+                        .map(|s| s.parse::<crate::note::Status>())
+                        .transpose()?;
                     let id = repo.create_note(
                         &a.title,
                         CreateNoteOptions {
                             tags: a.tags,
                             links: a.links,
                             body: a.body,
+                            status,
                         },
                     )?;
                     println!("{id}");
                     Ok(())
                 }
                 NoteCommand::List(a) => {
-                    let notes = repo.list_notes(a.tag.as_deref())?;
+                    let status = a
+                        .status
+                        .map(|s| s.parse::<crate::note::Status>())
+                        .transpose()?;
+                    let notes = repo.list_notes(&ListNotesFilter {
+                        tag: a.tag.as_deref(),
+                        status,
+                    })?;
                     match a.format {
                         OutputFormat::Json => print_note_list_json(&notes),
                         OutputFormat::Text => print_note_list(&notes),
@@ -214,6 +285,7 @@ pub fn run(args: Args) -> crate::Result<()> {
                         &a.id,
                         EditNoteOptions {
                             title: a.title.as_deref(),
+                            status: a.status.as_deref(),
                             tags: a.tags.as_deref(),
                             add_tag: a.add_tag.as_deref(),
                             remove_tag: a.remove_tag.as_deref(),
@@ -256,6 +328,119 @@ pub fn run(args: Args) -> crate::Result<()> {
             print_note_list(&orphans);
             Ok(())
         }
+
+        Command::Search(a) => {
+            let repo = Repo::open(&root)?;
+            let results = repo.search(&a.pattern)?;
+            match a.format {
+                OutputFormat::Json => {
+                    let arr: Vec<serde_json::Value> = results
+                        .iter()
+                        .map(|r| {
+                            let mut v = note_to_json(&r.note);
+                            v.as_object_mut()
+                                .unwrap()
+                                .insert("matched_fields".into(), serde_json::json!(r.matched_fields));
+                            v
+                        })
+                        .collect();
+                    println!("{}", serde_json::to_string_pretty(&arr).unwrap());
+                }
+                OutputFormat::Text => {
+                    for r in &results {
+                        println!(
+                            "{}  {}  ({})",
+                            r.note.id,
+                            r.note.frontmatter.title,
+                            r.matched_fields.join(", ")
+                        );
+                    }
+                }
+            }
+            Ok(())
+        }
+
+        Command::Read(a) => {
+            let repo = Repo::open(&root)?;
+            let status = a
+                .status
+                .map(|s| s.parse::<crate::note::Status>())
+                .transpose()?;
+            let notes = repo.list_notes(&ListNotesFilter {
+                tag: a.tag.as_deref(),
+                status,
+            })?;
+            for n in &notes {
+                println!("--- {} ---", n.id);
+                println!("title: {}", n.frontmatter.title);
+                println!("status: {}", n.frontmatter.status);
+                if !n.frontmatter.tags.is_empty() {
+                    println!("tags: {}", n.frontmatter.tags.join(", "));
+                }
+                if !n.frontmatter.links.is_empty() {
+                    println!("links: {}", n.frontmatter.links.join(", "));
+                }
+                println!();
+                if !n.body.is_empty() {
+                    println!("{}", n.body);
+                    println!();
+                }
+            }
+            Ok(())
+        }
+
+        Command::Context(a) => {
+            let repo = Repo::open(&root)?;
+            let notes = repo.context(&a.id, a.depth)?;
+            match a.format {
+                OutputFormat::Json => print_note_list_json(&notes),
+                OutputFormat::Text => {
+                    for (i, n) in notes.iter().enumerate() {
+                        if i > 0 {
+                            println!();
+                        }
+                        println!("--- {} ---", n.id);
+                        println!("title: {}", n.frontmatter.title);
+                        println!("status: {}", n.frontmatter.status);
+                        if !n.frontmatter.tags.is_empty() {
+                            println!("tags: {}", n.frontmatter.tags.join(", "));
+                        }
+                        if !n.frontmatter.links.is_empty() {
+                            println!("links: {}", n.frontmatter.links.join(", "));
+                        }
+                        if !n.body.is_empty() {
+                            println!();
+                            println!("{}", n.body);
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+
+        Command::Stats => {
+            let repo = Repo::open(&root)?;
+            let stats = repo.stats()?;
+            println!("{} notes ({} draft, {} permanent)", stats.total, stats.draft_count, stats.permanent_count);
+            println!("{} orphans", stats.orphan_count);
+            if !stats.tag_counts.is_empty() {
+                println!();
+                println!("Tags:");
+                for (tag, count) in &stats.tag_counts {
+                    println!("  {tag}: {count}");
+                }
+            }
+            if !stats.most_connected.is_empty() && stats.most_connected.iter().any(|(_, _, c)| *c > 0) {
+                println!();
+                println!("Most connected:");
+                for (id, title, count) in &stats.most_connected {
+                    if *count > 0 {
+                        println!("  {id}  {title}  ({count} backlinks)");
+                    }
+                }
+            }
+            Ok(())
+        }
     }
 }
 
@@ -266,7 +451,7 @@ fn print_note_list(notes: &[Note]) {
         } else {
             format!("  [{}]", n.frontmatter.tags.join(", "))
         };
-        println!("{}{tags}  {}", n.id, n.frontmatter.title);
+        println!("{}  {}{tags}  {}", n.id, n.frontmatter.status, n.frontmatter.title);
     }
 }
 
@@ -279,6 +464,7 @@ fn note_to_json(n: &Note) -> serde_json::Value {
     serde_json::json!({
         "id": n.id,
         "title": n.frontmatter.title,
+        "status": n.frontmatter.status.to_string(),
         "tags": n.frontmatter.tags,
         "links": n.frontmatter.links,
         "body": n.body,
@@ -293,6 +479,7 @@ fn print_note_show(n: &Note) {
     println!("{}", n.id);
     println!();
     println!("  {:<10}{}", "Title:", n.frontmatter.title);
+    println!("  {:<10}{}", "Status:", n.frontmatter.status);
     if !n.frontmatter.tags.is_empty() {
         println!("  {:<10}{}", "Tags:", n.frontmatter.tags.join(", "));
     }
@@ -308,6 +495,7 @@ fn print_note_show(n: &Note) {
 fn print_note_field(n: &Note, field: &str) -> crate::Result<()> {
     let value = match field {
         "title" => Some(n.frontmatter.title.clone()),
+        "status" => Some(n.frontmatter.status.to_string()),
         "tags" => Some(n.frontmatter.tags.join(", ")),
         "links" => Some(n.frontmatter.links.join(", ")),
         "body" => Some(n.body.clone()),

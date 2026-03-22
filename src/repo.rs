@@ -11,11 +11,18 @@ pub struct CreateNoteOptions {
     pub tags: Option<String>,
     pub links: Option<String>,
     pub body: Option<String>,
+    pub status: Option<note::Status>,
+}
+
+pub struct ListNotesFilter<'a> {
+    pub tag: Option<&'a str>,
+    pub status: Option<note::Status>,
 }
 
 #[derive(Default)]
 pub struct EditNoteOptions<'a> {
     pub title: Option<&'a str>,
+    pub status: Option<&'a str>,
     pub tags: Option<&'a str>,
     pub add_tag: Option<&'a str>,
     pub remove_tag: Option<&'a str>,
@@ -208,6 +215,9 @@ impl Repo {
         let note_path = dir.join(format!("{id}.md"));
 
         let mut fm = note::new_frontmatter(title);
+        if let Some(status) = opts.status {
+            fm.status = status;
+        }
         if let Some(t) = opts.tags {
             fm.tags = t.split(',').map(|s| s.trim().to_string()).collect();
         }
@@ -222,7 +232,7 @@ impl Repo {
         Ok(id)
     }
 
-    pub fn list_notes(&self, tag_filter: Option<&str>) -> Result<Vec<Note>> {
+    pub fn list_notes(&self, filter: &ListNotesFilter<'_>) -> Result<Vec<Note>> {
         let dir = self.zettel_dir();
         let mut notes = Vec::new();
 
@@ -246,8 +256,12 @@ impl Repo {
             }
         }
 
-        if let Some(tag) = tag_filter {
+        if let Some(tag) = filter.tag {
             notes.retain(|n| n.frontmatter.tags.iter().any(|t| t == tag));
+        }
+
+        if let Some(status) = filter.status {
+            notes.retain(|n| n.frontmatter.status == status);
         }
 
         notes.sort_by(|a, b| a.id.cmp(&b.id));
@@ -281,6 +295,10 @@ impl Repo {
 
         if let Some(new_title) = opts.title {
             fm.title = new_title.to_string();
+        }
+
+        if let Some(new_status) = opts.status {
+            fm.status = new_status.parse::<note::Status>()?;
         }
 
         if let Some(new_body) = opts.body {
@@ -348,7 +366,7 @@ impl Repo {
         let resolved = self.resolve_id(id)?;
         let prefix = extract_prefix(&resolved).map(|(p, _)| p.to_string());
 
-        let all_notes = self.list_notes(None)?;
+        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
         let mut results = Vec::new();
 
         for n in &all_notes {
@@ -380,7 +398,7 @@ impl Repo {
 
     /// Find notes that have no incoming or outgoing links.
     pub fn orphans(&self) -> Result<Vec<Note>> {
-        let all_notes = self.list_notes(None)?;
+        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
         let all_ids: Vec<&str> = all_notes.iter().map(|n| n.id.as_str()).collect();
 
         let mut orphans = Vec::new();
@@ -409,6 +427,7 @@ impl Repo {
                     id: n.id.clone(),
                     frontmatter: NoteFrontmatter {
                         title: n.frontmatter.title.clone(),
+                        status: n.frontmatter.status,
                         tags: n.frontmatter.tags.clone(),
                         links: n.frontmatter.links.clone(),
                         created: n.frontmatter.created.clone(),
@@ -421,6 +440,175 @@ impl Repo {
 
         Ok(orphans)
     }
+
+    // -- Search --
+
+    pub fn search(&self, pattern: &str) -> Result<Vec<SearchResult>> {
+        let re = regex::Regex::new(pattern)
+            .map_err(|e| Error::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e)))?;
+
+        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
+        let mut results = Vec::new();
+
+        for n in all_notes {
+            let mut matched_fields = Vec::new();
+            if re.is_match(&n.frontmatter.title) {
+                matched_fields.push("title".to_string());
+            }
+            if n.frontmatter.tags.iter().any(|t| re.is_match(t)) {
+                matched_fields.push("tags".to_string());
+            }
+            if re.is_match(&n.body) {
+                matched_fields.push("body".to_string());
+            }
+            if !matched_fields.is_empty() {
+                results.push(SearchResult {
+                    note: n,
+                    matched_fields,
+                });
+            }
+        }
+
+        Ok(results)
+    }
+
+    // -- Context (neighborhood) --
+
+    pub fn context(&self, id: &str, depth: usize) -> Result<Vec<Note>> {
+        let resolved = self.resolve_id(id)?;
+        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
+
+        let mut collected: Vec<String> = vec![resolved.clone()];
+        let mut frontier: Vec<String> = vec![resolved];
+
+        for _ in 0..depth {
+            let mut next_frontier = Vec::new();
+            for current_id in &frontier {
+                // Forward links from this note
+                if let Some(n) = all_notes.iter().find(|n| &n.id == current_id) {
+                    for link in &n.frontmatter.links {
+                        if let Ok(resolved_link) = self.resolve_id(link) {
+                            if !collected.contains(&resolved_link) {
+                                collected.push(resolved_link.clone());
+                                next_frontier.push(resolved_link);
+                            }
+                        }
+                    }
+                    // Also check body [[refs]]
+                    for other in &all_notes {
+                        if !collected.contains(&other.id)
+                            && body_contains_link(&n.body, &other.id, extract_prefix(&other.id).map(|(p, _)| p))
+                        {
+                            collected.push(other.id.clone());
+                            next_frontier.push(other.id.clone());
+                        }
+                    }
+                }
+
+                // Backlinks to this note
+                for other in &all_notes {
+                    if collected.contains(&other.id) {
+                        continue;
+                    }
+                    let links_here = other.frontmatter.links.iter().any(|l| {
+                        l == current_id
+                            || self.resolve_id(l).ok().as_deref() == Some(current_id.as_str())
+                    }) || body_contains_link(
+                        &other.body,
+                        current_id,
+                        extract_prefix(current_id).map(|(p, _)| p),
+                    );
+                    if links_here {
+                        collected.push(other.id.clone());
+                        next_frontier.push(other.id.clone());
+                    }
+                }
+            }
+            frontier = next_frontier;
+            if frontier.is_empty() {
+                break;
+            }
+        }
+
+        // Return full notes in collected order
+        let mut result = Vec::new();
+        for id in &collected {
+            if let Some(n) = all_notes.iter().find(|n| &n.id == id) {
+                result.push(Note {
+                    id: n.id.clone(),
+                    frontmatter: NoteFrontmatter {
+                        title: n.frontmatter.title.clone(),
+                        status: n.frontmatter.status,
+                        tags: n.frontmatter.tags.clone(),
+                        links: n.frontmatter.links.clone(),
+                        created: n.frontmatter.created.clone(),
+                        updated: n.frontmatter.updated.clone(),
+                    },
+                    body: n.body.clone(),
+                });
+            }
+        }
+
+        Ok(result)
+    }
+
+    // -- Stats --
+
+    pub fn stats(&self) -> Result<Stats> {
+        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
+
+        let total = all_notes.len();
+        let draft_count = all_notes.iter().filter(|n| n.frontmatter.status == note::Status::Draft).count();
+        let permanent_count = all_notes.iter().filter(|n| n.frontmatter.status == note::Status::Permanent).count();
+
+        // Tag frequency
+        let mut tag_counts: Vec<(String, usize)> = Vec::new();
+        for n in &all_notes {
+            for tag in &n.frontmatter.tags {
+                if let Some(entry) = tag_counts.iter_mut().find(|(t, _)| t == tag) {
+                    entry.1 += 1;
+                } else {
+                    tag_counts.push((tag.clone(), 1));
+                }
+            }
+        }
+        tag_counts.sort_by(|a, b| b.1.cmp(&a.1));
+
+        // Most connected (by backlink count)
+        let mut backlink_counts: Vec<(String, String, usize)> = Vec::new();
+        for n in &all_notes {
+            let count = self.backlinks(&n.id)?.len();
+            backlink_counts.push((n.id.clone(), n.frontmatter.title.clone(), count));
+        }
+        backlink_counts.sort_by(|a, b| b.2.cmp(&a.2));
+
+        let orphan_count = self.orphans()?.len();
+
+        Ok(Stats {
+            total,
+            draft_count,
+            permanent_count,
+            tag_counts,
+            most_connected: backlink_counts.into_iter().take(5).collect(),
+            orphan_count,
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct SearchResult {
+    pub note: Note,
+    pub matched_fields: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Stats {
+    pub total: usize,
+    pub draft_count: usize,
+    pub permanent_count: usize,
+    pub tag_counts: Vec<(String, usize)>,
+    pub most_connected: Vec<(String, String, usize)>,
+    pub orphan_count: usize,
 }
 
 /// Check if a markdown body contains a `[[ref]]` link to the given ID.

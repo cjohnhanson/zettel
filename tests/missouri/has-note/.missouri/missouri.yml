@@ -27,6 +27,13 @@ transitions:
       files:
         - path: ".zettel/"
           ignore: true
+  - name: "promote to permanent"
+    command: "zettel note edit attention-is-not-explanation --status permanent"
+    target: "../has-note-permanent"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
 
 assertions:
   - name: "note list shows note"
@@ -64,3 +71,31 @@ assertions:
   - name: "duplicate slug rejected"
     command: "zettel note create 'Attention is not explanation'"
     should_fail: true
+  - name: "default status is draft"
+    command: "zettel note show attention-is-not-explanation --field status"
+    stdout: "draft\n"
+  - name: "list shows status"
+    command: "zettel note list | grep -q 'draft'"
+  - name: "list status filter draft"
+    command: "test $(zettel note list --status draft --format json | jq 'length') -eq 1"
+  - name: "list status filter permanent is empty"
+    command: "zettel note list --status permanent"
+    stdout: ""
+  - name: "json has status field"
+    command: "zettel note show attention-is-not-explanation --format json | jq -r '.status'"
+    stdout: "draft\n"
+  - name: "search by title"
+    command: "zettel search 'Attention' | grep -q 'title'"
+  - name: "search by body"
+    command: "zettel search 'explanation' | grep -q 'Attention'"
+  - name: "search no match"
+    command: "zettel search 'nonexistent'"
+    stdout: ""
+  - name: "read shows full content"
+    command: "zettel read --tag ml | grep -q 'Attention is not explanation'"
+  - name: "read by status"
+    command: "zettel read --status draft | grep -q 'Attention'"
+  - name: "stats shows count"
+    command: "zettel stats | grep -q '1 notes'"
+  - name: "stats shows draft count"
+    command: "zettel stats | grep -q '1 draft'"

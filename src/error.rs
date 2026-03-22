@@ -15,6 +15,9 @@ pub enum Error {
     #[error("note '{0}' already exists")]
     NoteAlreadyExists(String),
 
+    #[error("'{status}' is not a valid status")]
+    InvalidStatus { status: String },
+
     #[error("unknown field '{0}'")]
     UnknownField(String),
 
