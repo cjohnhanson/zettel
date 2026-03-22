@@ -97,6 +97,10 @@ pub struct NoteListArgs {
     #[arg(short, long)]
     pub status: Option<String>,
 
+    /// Filter by selector (namespace:value, repeatable, ANDs together)
+    #[arg(long = "where")]
+    pub r#where: Vec<String>,
+
     /// Output format (text or json)
     #[arg(long, default_value = "text")]
     pub format: OutputFormat,
@@ -258,10 +262,18 @@ pub fn run(args: Args) -> crate::Result<()> {
                         .status
                         .map(|s| s.parse::<crate::note::Status>())
                         .transpose()?;
-                    let notes = repo.list_notes(&ListNotesFilter {
+                    let selectors: Vec<crate::Selector> = a
+                        .r#where
+                        .iter()
+                        .filter_map(|s| crate::Selector::parse(s))
+                        .collect();
+                    let mut notes = repo.list_notes(&ListNotesFilter {
                         tag: a.tag.as_deref(),
                         status,
                     })?;
+                    if !selectors.is_empty() {
+                        notes.retain(|n| crate::selector::matches_all(&selectors, n));
+                    }
                     match a.format {
                         OutputFormat::Json => print_note_list_json(&notes),
                         OutputFormat::Text => print_note_list(&notes),
