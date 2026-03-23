@@ -1,0 +1,11 @@
+assertions:
+  - name: "check detects broken link"
+    command: "zettel check 2>&1 | grep -q 'broken link'"
+  - name: "check exits non-zero"
+    command: "zettel check; test $? -ne 0"
+  - name: "check shows the dangling target"
+    command: "zettel check 2>&1 | grep -q 'nonexistent-note'"
+  - name: "check shows the source note"
+    command: "zettel check 2>&1 | grep -q 'Attention is not explanation'"
+  - name: "check shows frontmatter location"
+    command: "zettel check 2>&1 | grep -q 'frontmatter'"

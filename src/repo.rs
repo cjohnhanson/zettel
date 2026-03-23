@@ -593,6 +593,48 @@ impl Repo {
             orphan_count,
         })
     }
+
+    // -- Check (broken links) --
+
+    pub fn check(&self) -> Result<Vec<BrokenLink>> {
+        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
+        let mut broken = Vec::new();
+
+        for n in &all_notes {
+            for link in &n.frontmatter.links {
+                if self.resolve_id(link).is_err() {
+                    broken.push(BrokenLink {
+                        source_id: n.id.clone(),
+                        source_title: n.frontmatter.title.clone(),
+                        target: link.clone(),
+                        location: "frontmatter".to_string(),
+                    });
+                }
+            }
+
+            // Check [[ref]] links in body
+            for cap in extract_body_refs(&n.body) {
+                if self.resolve_id(&cap).is_err() {
+                    broken.push(BrokenLink {
+                        source_id: n.id.clone(),
+                        source_title: n.frontmatter.title.clone(),
+                        target: cap,
+                        location: "body".to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(broken)
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct BrokenLink {
+    pub source_id: String,
+    pub source_title: String,
+    pub target: String,
+    pub location: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -609,6 +651,25 @@ pub struct Stats {
     pub tag_counts: Vec<(String, usize)>,
     pub most_connected: Vec<(String, String, usize)>,
     pub orphan_count: usize,
+}
+
+/// Extract all `[[ref]]` references from a markdown body.
+fn extract_body_refs(body: &str) -> Vec<String> {
+    let mut refs = Vec::new();
+    let mut remaining = body;
+    while let Some(start) = remaining.find("[[") {
+        let after = &remaining[start + 2..];
+        if let Some(end) = after.find("]]") {
+            let reference = &after[..end];
+            if !reference.is_empty() && !refs.contains(&reference.to_string()) {
+                refs.push(reference.to_string());
+            }
+            remaining = &after[end + 2..];
+        } else {
+            break;
+        }
+    }
+    refs
 }
 
 /// Check if a markdown body contains a `[[ref]]` link to the given ID.

@@ -41,6 +41,13 @@ transitions:
       files:
         - path: ".zettel/"
           ignore: true
+  - name: "add dangling link"
+    command: "zettel note edit attention-is-not-explanation --add-link nonexistent-note"
+    target: "../has-dangling-link"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
 
 assertions:
   - name: "note list shows note"
@@ -112,3 +119,12 @@ assertions:
     command: "zettel stats | grep -q '1 notes'"
   - name: "stats shows draft count"
     command: "zettel stats | grep -q '1 draft'"
+  - name: "stats json is valid"
+    command: "zettel stats --format json | jq -e '.total == 1'"
+  - name: "stats json has draft count"
+    command: "zettel stats --format json | jq -e '.draft == 1'"
+  - name: "check passes with no broken links"
+    command: "zettel check"
+    stdout: "no broken links\n"
+  - name: "orphans json format"
+    command: "zettel orphans --format json | jq -e 'type == \"array\"'"

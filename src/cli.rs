@@ -32,7 +32,7 @@ pub enum Command {
     Backlinks(BacklinksArgs),
 
     /// Show orphaned notes (no links in or out)
-    Orphans,
+    Orphans(OrphansArgs),
 
     /// Search notes by regex pattern
     Search(SearchArgs),
@@ -44,7 +44,10 @@ pub enum Command {
     Context(ContextArgs),
 
     /// Show knowledge base statistics
-    Stats,
+    Stats(StatsArgs),
+
+    /// Check for broken links and other issues
+    Check,
 
     /// Browse bundled documentation
     Docs(DocsArgs),
@@ -83,8 +86,8 @@ pub struct NoteCreateArgs {
     pub title: String,
 
     /// Comma-separated tags
-    #[arg(short, long)]
-    pub tags: Option<String>,
+    #[arg(short, long = "tag")]
+    pub tag: Option<String>,
 
     /// Comma-separated link IDs
     #[arg(short, long)]
@@ -95,7 +98,7 @@ pub struct NoteCreateArgs {
     pub body: Option<String>,
 
     /// Initial status (default: draft)
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "draft")]
     pub status: Option<String>,
 }
 
@@ -152,8 +155,8 @@ pub struct NoteEditArgs {
     pub status: Option<String>,
 
     /// New tags (replaces existing)
-    #[arg(short, long)]
-    pub tags: Option<String>,
+    #[arg(short, long = "tag")]
+    pub tag: Option<String>,
 
     /// Add a tag
     #[arg(long)]
@@ -176,7 +179,7 @@ pub struct NoteEditArgs {
     pub remove_link: Option<String>,
 
     /// Replace the entire body
-    #[arg(long)]
+    #[arg(short, long)]
     pub body: Option<String>,
 
     /// Append text to the body
@@ -235,6 +238,20 @@ pub struct ContextArgs {
     pub format: OutputFormat,
 }
 
+#[derive(Parser)]
+pub struct OrphansArgs {
+    /// Output format (text or json)
+    #[arg(long, default_value = "text")]
+    pub format: OutputFormat,
+}
+
+#[derive(Parser)]
+pub struct StatsArgs {
+    /// Output format (text or json)
+    #[arg(long, default_value = "text")]
+    pub format: OutputFormat,
+}
+
 /// Run zettel with the given arguments.
 pub fn run(args: Args) -> crate::Result<()> {
     let root = if args.root.is_relative() {
@@ -260,7 +277,7 @@ pub fn run(args: Args) -> crate::Result<()> {
                     let id = repo.create_note(
                         &a.title,
                         CreateNoteOptions {
-                            tags: a.tags,
+                            tags: a.tag,
                             links: a.links,
                             body: a.body,
                             status,
@@ -310,7 +327,7 @@ pub fn run(args: Args) -> crate::Result<()> {
                         EditNoteOptions {
                             title: a.title.as_deref(),
                             status: a.status.as_deref(),
-                            tags: a.tags.as_deref(),
+                            tags: a.tag.as_deref(),
                             add_tag: a.add_tag.as_deref(),
                             remove_tag: a.remove_tag.as_deref(),
                             links: a.links.as_deref(),
@@ -346,10 +363,13 @@ pub fn run(args: Args) -> crate::Result<()> {
             Ok(())
         }
 
-        Command::Orphans => {
+        Command::Orphans(a) => {
             let repo = Repo::open(&root)?;
             let orphans = repo.orphans()?;
-            print_note_list(&orphans);
+            match a.format {
+                OutputFormat::Json => print_note_list_json(&orphans),
+                OutputFormat::Text => print_note_list(&orphans),
+            }
             Ok(())
         }
 
@@ -442,6 +462,24 @@ pub fn run(args: Args) -> crate::Result<()> {
             Ok(())
         }
 
+        Command::Check => {
+            let repo = Repo::open(&root)?;
+            let broken = repo.check()?;
+            if broken.is_empty() {
+                println!("no broken links");
+            } else {
+                println!("{} broken link(s):", broken.len());
+                for bl in &broken {
+                    println!(
+                        "  {} ({}) → {} [{}]",
+                        bl.source_id, bl.source_title, bl.target, bl.location
+                    );
+                }
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+
         Command::Docs(args) => {
             match args.topic.as_deref() {
                 None | Some("list") => {
@@ -470,24 +508,39 @@ pub fn run(args: Args) -> crate::Result<()> {
             }
         }
 
-        Command::Stats => {
+        Command::Stats(a) => {
             let repo = Repo::open(&root)?;
             let stats = repo.stats()?;
-            println!("{} notes ({} draft, {} permanent)", stats.total, stats.draft_count, stats.permanent_count);
-            println!("{} orphans", stats.orphan_count);
-            if !stats.tag_counts.is_empty() {
-                println!();
-                println!("Tags:");
-                for (tag, count) in &stats.tag_counts {
-                    println!("  {tag}: {count}");
+            match a.format {
+                OutputFormat::Json => {
+                    let json = serde_json::json!({
+                        "total": stats.total,
+                        "draft": stats.draft_count,
+                        "permanent": stats.permanent_count,
+                        "orphans": stats.orphan_count,
+                        "tags": stats.tag_counts.iter().map(|(t, c)| serde_json::json!({"tag": t, "count": c})).collect::<Vec<_>>(),
+                        "most_connected": stats.most_connected.iter().map(|(id, title, c)| serde_json::json!({"id": id, "title": title, "backlinks": c})).collect::<Vec<_>>(),
+                    });
+                    println!("{}", serde_json::to_string_pretty(&json).unwrap());
                 }
-            }
-            if !stats.most_connected.is_empty() && stats.most_connected.iter().any(|(_, _, c)| *c > 0) {
-                println!();
-                println!("Most connected:");
-                for (id, title, count) in &stats.most_connected {
-                    if *count > 0 {
-                        println!("  {id}  {title}  ({count} backlinks)");
+                OutputFormat::Text => {
+                    println!("{} notes ({} draft, {} permanent)", stats.total, stats.draft_count, stats.permanent_count);
+                    println!("{} orphans", stats.orphan_count);
+                    if !stats.tag_counts.is_empty() {
+                        println!();
+                        println!("Tags:");
+                        for (tag, count) in &stats.tag_counts {
+                            println!("  {tag}: {count}");
+                        }
+                    }
+                    if !stats.most_connected.is_empty() && stats.most_connected.iter().any(|(_, _, c)| *c > 0) {
+                        println!();
+                        println!("Most connected:");
+                        for (id, title, count) in &stats.most_connected {
+                            if *count > 0 {
+                                println!("  {id}  {title}  ({count} backlinks)");
+                            }
+                        }
                     }
                 }
             }
