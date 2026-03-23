@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod config;
+pub mod docs;
 pub mod error;
 pub mod note;
 pub mod repo;

@@ -45,6 +45,18 @@ pub enum Command {
 
     /// Show knowledge base statistics
     Stats,
+
+    /// Browse bundled documentation
+    Docs(DocsArgs),
+}
+
+#[derive(clap::Args)]
+pub struct DocsArgs {
+    /// Topic slug to display, or "search" to search
+    pub topic: Option<String>,
+
+    /// Search query (when topic is "search")
+    pub query: Option<String>,
 }
 
 #[derive(Parser)]
@@ -428,6 +440,34 @@ pub fn run(args: Args) -> crate::Result<()> {
                 }
             }
             Ok(())
+        }
+
+        Command::Docs(args) => {
+            match args.topic.as_deref() {
+                None | Some("list") => {
+                    crate::docs::list();
+                    Ok(())
+                }
+                Some("search") => {
+                    let query = args.query.as_deref().unwrap_or("");
+                    crate::docs::search(query);
+                    Ok(())
+                }
+                Some(slug) => {
+                    if crate::docs::show(slug) {
+                        Ok(())
+                    } else {
+                        eprintln!("unknown doc: '{slug}'");
+                        eprintln!();
+                        eprintln!("available docs:");
+                        crate::docs::list();
+                        Err(crate::Error::Io(std::io::Error::new(
+                            std::io::ErrorKind::NotFound,
+                            format!("doc '{slug}' not found"),
+                        )))
+                    }
+                }
+            }
         }
 
         Command::Stats => {
