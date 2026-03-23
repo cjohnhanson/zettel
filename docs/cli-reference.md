@@ -139,3 +139,16 @@ Dump full content of matching notes. Prints frontmatter summary and body for eac
 ## `zettel stats`
 
 Print knowledge base health: total notes, draft/permanent counts, orphan count, tag distribution, and most-connected notes.
+
+---
+
+## `zettel docs`
+
+Browse bundled zettel documentation.
+
+```
+zettel docs                    List available docs (shows slugs)
+zettel docs list               Same as bare `zettel docs`
+zettel docs <identifier>       Print a doc by slug, title, or unique prefix
+zettel docs search <query>     Search across all docs
+```

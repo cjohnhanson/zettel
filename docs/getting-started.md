@@ -23,8 +23,9 @@ zettel note create "Connection pooling causes stale reads under load" \
   -t debugging,postgres
 ```
 
-Zettel prints the note ID (e.g., `a3f2`). The note is created as a draft
-with the given title and tags.
+Zettel prints the note ID (e.g., `a3f2-connection-pooling-causes-stale-reads`).
+The note is created as a draft with the given title and tags. The 4-character
+prefix (`a3f2`) is enough to identify the note in most commands.
 
 To add a body inline:
 
@@ -47,7 +48,7 @@ zettel note list --tag postgres
 zettel note list --status draft
 
 # Show a specific note
-zettel note show a3f2
+zettel note show a3f2-connection-pooling-causes-stale-reads
 
 # Full-text search
 zettel search "connection pool"
@@ -65,26 +66,26 @@ when creating:
 ```bash
 zettel note create "Workaround: force new connection per transaction" \
   -t postgres \
-  -l a3f2
+  -l a3f2-connection-pooling-causes-stale-reads
 ```
 
 Or add links later:
 
 ```bash
-zettel note edit b7c1 --add-link a3f2
+zettel note edit b7c1-workaround-force-new-connection --add-link a3f2-connection-pooling-causes-stale-reads
 ```
 
 ## Explore the graph
 
 ```bash
 # What links to this note?
-zettel backlinks a3f2
+zettel backlinks a3f2-connection-pooling-causes-stale-reads
 
 # Show a note and its neighborhood (linked notes within 2 hops)
-zettel context a3f2
+zettel context a3f2-connection-pooling-causes-stale-reads
 
 # Deeper traversal
-zettel context a3f2 -d 4
+zettel context a3f2-connection-pooling-causes-stale-reads -d 4
 
 # Find unlinked notes
 zettel orphans
@@ -97,19 +98,19 @@ zettel stats
 
 ```bash
 # Change title
-zettel note edit a3f2 --title "Connection pooling and stale reads"
+zettel note edit a3f2-connection-pooling-causes-stale-reads --title "Connection pooling and stale reads"
 
 # Add a tag
-zettel note edit a3f2 --add-tag production-incident
+zettel note edit a3f2-connection-pooling-causes-stale-reads --add-tag production-incident
 
 # Append to the body
-zettel note edit a3f2 --append "Confirmed: setting max_age=300 resolves this."
+zettel note edit a3f2-connection-pooling-causes-stale-reads --append "Confirmed: setting max_age=300 resolves this."
 
 # Promote to permanent (human decision)
-zettel note edit a3f2 --status permanent
+zettel note edit a3f2-connection-pooling-causes-stale-reads --status permanent
 
 # Delete a note
-zettel note delete a3f2
+zettel note delete a3f2-connection-pooling-causes-stale-reads
 ```
 
 ## The draft-to-permanent workflow
