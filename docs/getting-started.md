@@ -121,5 +121,6 @@ zettel note delete a3f2-connection-pooling-causes-stale-reads
    note, or delete
 4. Promote with `zettel note edit <id> --status permanent`
 
-The knowledge base stays useful when permanent notes are curated —
-atomic, well-linked, and written in the author's voice.
+Permanent notes should hold one idea each, link to related notes,
+and be rewritten in the reviewer's own words rather than left as
+raw agent output.
