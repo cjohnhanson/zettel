@@ -1,4 +1,4 @@
-# zettel
+# 🗃️ zettel
 
 > Zettelkasten for repos. Atomic notes, linked ideas, plain markdown
 > in git.
