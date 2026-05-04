@@ -7,7 +7,7 @@ description = "Zettelkasten note management on frontmattered markdown"
 [dependencies]
 camino = { version = "1", features = ["serde1"] }
 clap = { version = "4", features = ["derive", "env", "unicode", "wrap_help"] }
-mdstore = { path = "../mdstore" }
+mdstore = { git = "https://github.com/cjohnhanson/mdstore", rev = "1d9524ccb11c6c177a36f23cbab962d631f1615b" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yml = "0.0"
