@@ -27,18 +27,19 @@ draft to permanent is always a human decision.
 ## Usage
 
 ```
-zettel init                              # set up .zettel/
-zettel note create "Title" -t tag1,tag2  # create a draft note
-zettel note list [--tag t] [--status s]  # list notes
-zettel note show <id>                    # full note content
-zettel note edit <id> --add-link b7c1    # link two notes
-zettel read [--tag t]                    # dump full content of matching notes
-zettel search <pattern>                  # regex search across notes
-zettel backlinks <id>                    # notes linking to this one
-zettel context <id> --depth 3            # neighborhood within N hops
-zettel orphans                           # unlinked notes
-zettel stats                             # note counts, tag distribution, connectivity
-zettel docs [topic]                      # bundled documentation
+zettel init                                 # set up .zettel/
+zettel note create "Title" --tag x --tag y  # create a draft note
+zettel note list [--tag t] [--status s]     # list notes
+zettel note show <id>                       # full note content
+zettel note edit <id> --add-link b7c1       # link two notes
+zettel read [--tag t]                       # dump full content of matching notes
+zettel search <pattern>                     # regex search across notes
+zettel backlinks <id>                       # notes linking to this one
+zettel context <id> --depth 3               # neighborhood within N hops
+zettel orphans                              # unlinked notes
+zettel check                                # verify links, tags, frontmatter
+zettel stats                                # note counts, tag distribution, connectivity
+zettel docs [topic]                         # bundled documentation
 ```
 
 ## Documentation

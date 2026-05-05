@@ -3,6 +3,13 @@ name = "zettel"
 version = "0.2.0"
 edition = "2024"
 description = "Zettelkasten note management on frontmattered markdown"
+license = "MIT"
+repository = "https://github.com/cjohnhanson/zettel"
+homepage = "https://github.com/cjohnhanson/zettel"
+readme = "README.md"
+authors = ["Cody Hanson"]
+keywords = ["zettelkasten", "notes", "markdown", "knowledge-base", "cli"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 camino = { version = "1", features = ["serde1"] }
