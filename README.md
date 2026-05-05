@@ -19,9 +19,9 @@ cargo install --git https://github.com/cjohnhanson/zettel
 ## Usage
 
 ```sh
-zettel init
+zettel init                                                  # inside a git repo
 zettel note create "Connection pooling causes stale reads" \
-  --tag bug --tag postgres --body "Pool reuses sockets after failover..."
+  --tag bug,postgres --body "Pool reuses sockets after failover..."
 zettel note list --tag postgres
 zettel search "stale read"
 zettel context a3f2 --depth 2
@@ -30,8 +30,8 @@ zettel context a3f2 --depth 2
 Full command surface:
 
 ```sh
-zettel init                                  # set up .zettel/
-zettel note create "Title" --tag x --tag y   # create a draft note (--tag repeatable)
+zettel init                                  # set up .zettel/ (in a git repo)
+zettel note create "Title" --tag a,b         # create a draft note (tags comma-separated)
 zettel note list [--tag t] [--status s]      # list notes
 zettel note show <id>                        # full note content
 zettel note edit <id> --add-link b7c1        # link two notes
