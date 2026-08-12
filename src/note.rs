@@ -4,7 +4,7 @@ use std::str::FromStr;
 use chrono::Utc;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-/// Note maturity status.
+/// The status of a note.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     Draft,
@@ -51,7 +51,7 @@ impl Default for Status {
     }
 }
 
-/// Frontmatter for a zettelkasten note.
+/// The frontmatter of a note.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct NoteFrontmatter {
     pub title: String,
@@ -59,14 +59,14 @@ pub struct NoteFrontmatter {
     pub status: Status,
     #[serde(default)]
     pub tags: Vec<String>,
-    /// Forward links to other notes by ID (prefix or full).
+    /// Forward links to other notes. Each link is a full ID or a prefix.
     #[serde(default)]
     pub links: Vec<String>,
     pub created: Option<String>,
     pub updated: Option<String>,
 }
 
-/// A parsed zettel note with its ID and content.
+/// A parsed note with its ID and content.
 #[derive(Debug, Serialize)]
 pub struct Note {
     pub id: String,
@@ -90,7 +90,7 @@ pub fn update_timestamp(fm: &mut NoteFrontmatter) {
     fm.updated = Some(format!("\"{}\"", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")));
 }
 
-/// Parse a note file's content into frontmatter and body.
+/// Parse the content of a note file into frontmatter and body.
 pub fn parse_note(content: &str) -> crate::error::Result<(NoteFrontmatter, String)> {
     let doc = mdstore::document::parse::<NoteFrontmatter>(content).map_err(|e| match e {
         mdstore::Error::MissingFrontmatter | mdstore::Error::UnclosedFrontmatter => {
@@ -101,7 +101,7 @@ pub fn parse_note(content: &str) -> crate::error::Result<(NoteFrontmatter, Strin
     Ok((doc.frontmatter, doc.body))
 }
 
-/// Serialize a note back to frontmattered markdown.
+/// Serialize a note to frontmattered markdown.
 pub fn serialize_note(fm: &NoteFrontmatter, body: &str) -> String {
     let mut s = String::from("---\n");
     s.push_str(&format!("title: \"{}\"\n", fm.title.replace('"', "\\\"")));

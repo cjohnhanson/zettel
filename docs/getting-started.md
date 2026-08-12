@@ -8,13 +8,14 @@ type: tutorial
 
 ## Initialize
 
-From your project root:
+Run this command from the project root:
 
 ```bash
 zettel init
 ```
 
-This creates `zettel.yml` (config) and a `.zettel/` directory for notes.
+The command makes the config file `zettel.yml` and the note directory
+`.zettel/`.
 
 ## Create a note
 
@@ -23,11 +24,12 @@ zettel note create "Connection pooling causes stale reads under load" \
   -t debugging,postgres
 ```
 
-Zettel prints the note ID (e.g., `a3f2-connection-pooling-causes-stale-reads`).
-The note is created as a draft with the given title and tags. The 4-character
-prefix (`a3f2`) is enough to identify the note in most commands.
+Zettel prints the note ID, for example
+`a3f2-connection-pooling-causes-stale-reads`. Zettel creates the note as a
+draft with the given title and tags. Most commands accept the 4-character
+prefix (`a3f2`) instead of the full ID.
 
-To add a body inline:
+Add a body on the command line:
 
 ```bash
 zettel note create "Why we chose YAML over TOML" \
@@ -47,21 +49,21 @@ zettel note list --tag postgres
 # Filter by status
 zettel note list --status draft
 
-# Show a specific note
+# Show one note
 zettel note show a3f2-connection-pooling-causes-stale-reads
 
-# Full-text search
+# Search the full text
 zettel search "connection pool"
 
-# Dump all note content (useful for piping to other tools)
+# Show all note content; pipe it to other tools
 zettel read
 zettel read --tag debugging
 ```
 
 ## Link notes
 
-Notes connect to each other via the `links` frontmatter field. Add a link
-when creating:
+Notes connect to each other through the `links` frontmatter field. Add a link
+when you create the note:
 
 ```bash
 zettel note create "Workaround: force new connection per transaction" \
@@ -69,7 +71,7 @@ zettel note create "Workaround: force new connection per transaction" \
   -l a3f2-connection-pooling-causes-stale-reads
 ```
 
-Or add links later:
+Add a link to a note that already exists:
 
 ```bash
 zettel note edit b7c1-workaround-force-new-connection --add-link a3f2-connection-pooling-causes-stale-reads
@@ -78,26 +80,26 @@ zettel note edit b7c1-workaround-force-new-connection --add-link a3f2-connection
 ## Explore the graph
 
 ```bash
-# What links to this note?
+# Show the notes that link to this note
 zettel backlinks a3f2-connection-pooling-causes-stale-reads
 
-# Show a note and its neighborhood (linked notes within 2 hops)
+# Show a note and the linked notes within 2 hops
 zettel context a3f2-connection-pooling-causes-stale-reads
 
-# Deeper traversal
+# Traverse more hops
 zettel context a3f2-connection-pooling-causes-stale-reads -d 4
 
-# Find unlinked notes
+# Show the notes with no links
 zettel orphans
 
-# Knowledge base health
+# Show the knowledge base statistics
 zettel stats
 ```
 
 ## Edit and maintain
 
 ```bash
-# Change title
+# Change the title
 zettel note edit a3f2-connection-pooling-causes-stale-reads --title "Connection pooling and stale reads"
 
 # Add a tag
@@ -106,7 +108,7 @@ zettel note edit a3f2-connection-pooling-causes-stale-reads --add-tag production
 # Append to the body
 zettel note edit a3f2-connection-pooling-causes-stale-reads --append "Confirmed: setting max_age=300 resolves this."
 
-# Promote to permanent (human decision)
+# Promote the note to permanent; a human makes this decision
 zettel note edit a3f2-connection-pooling-causes-stale-reads --status permanent
 
 # Delete a note
@@ -115,12 +117,12 @@ zettel note delete a3f2-connection-pooling-causes-stale-reads
 
 ## The draft-to-permanent workflow
 
-1. Agents and humans create notes as **drafts** during work
-2. Periodically, review drafts: `zettel note list --status draft`
-3. For each draft, decide: reformulate and promote, merge into another
-   note, or delete
-4. Promote with `zettel note edit <id> --status permanent`
+1. Agents and humans create notes as **drafts** during work.
+2. Review the drafts regularly with `zettel note list --status draft`.
+3. Decide what to do with each draft. Rewrite it and promote it, merge it into
+   another note, or delete it.
+4. Promote a draft with `zettel note edit <id> --status permanent`.
 
-Permanent notes should hold one idea each, link to related notes,
-and be rewritten in the reviewer's own words rather than left as
-raw agent output.
+A permanent note holds one idea. It links to the related notes. The reviewer
+rewrites it in their own words. Do not leave raw agent output in a permanent
+note.

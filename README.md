@@ -1,14 +1,15 @@
 # zettel
 
-A zettelkasten knowledge base for code repositories. Captures atomic notes as
-markdown files in `.zettel/`, linked through YAML frontmatter and inline
-`[[id]]` references, tracked in git alongside the code.
+Zettel is a zettelkasten knowledge base for code repositories. It keeps atomic
+notes as markdown files in `.zettel/`. Notes link to each other through YAML
+frontmatter and inline `[[id]]` references. Git tracks the notes next to the
+code.
 
-The problem it solves: when an agent does research — reading code, tracing a
-bug, weighing options — that work usually evaporates at the end of the
-session. zettel writes it down as draft notes a human can later review and
-promote into a permanent, curated knowledge base. Plaintext, git-tracked, no
-external service.
+Zettel solves one problem. During research an agent reads code, traces bugs,
+and compares options. That work is usually lost at the end of the session.
+Zettel writes the work down as draft notes. A human reviews the drafts later
+and promotes them into a permanent knowledge base. The notes are plain text.
+Git tracks them. Zettel needs no external service.
 
 ## Install
 
@@ -19,7 +20,7 @@ cargo install --git https://github.com/cjohnhanson/zettel
 ## Usage
 
 ```sh
-zettel init                                                  # inside a git repo
+zettel init                                                  # run inside a git repo
 zettel note create "Connection pooling causes stale reads" \
   --tag bug,postgres --body "Pool reuses sockets after failover..."
 zettel note list --tag postgres
@@ -27,23 +28,23 @@ zettel search "stale read"
 zettel context a3f2 --depth 2
 ```
 
-Full command surface:
+The full command set:
 
 ```sh
-zettel init                                  # set up .zettel/ (in a git repo)
-zettel note create "Title" --tag a,b         # create a draft note (tags comma-separated)
-zettel note list [--tag t] [--status s]      # list notes
-zettel note show <id>                        # full note content
-zettel note edit <id> --add-link b7c1        # link two notes
+zettel init                                  # make .zettel/ in a git repo
+zettel note create "Title" --tag a,b         # make a draft note; separate tags with commas
+zettel note list [--tag t] [--status s]      # list the notes
+zettel note show <id>                        # show the full content of one note
+zettel note edit <id> --add-link b7c1        # link one note to another
 zettel note delete <id>                      # remove a note
-zettel read [--tag t] [--status s]           # dump full content of matching notes
-zettel search <pattern>                      # regex search across notes
-zettel backlinks <id>                        # notes linking to this one
-zettel context <id> --depth N                # neighborhood within N hops
-zettel orphans                               # notes with no links in or out
-zettel check                                 # verify links, tags, frontmatter
-zettel stats                                 # counts, tag distribution, connectivity
-zettel docs [topic]                          # bundled documentation
+zettel read [--tag t] [--status s]           # show the full content of the matching notes
+zettel search <pattern>                      # search all notes with a regex
+zettel backlinks <id>                        # show the notes that link to this note
+zettel context <id> --depth N                # show the notes within N hops
+zettel orphans                               # show the notes with no links
+zettel check                                 # check the notes for broken links
+zettel stats                                 # show counts, tag distribution, and connectivity
+zettel docs [topic]                          # show the bundled documentation
 ```
 
 ## How it works
@@ -63,7 +64,7 @@ After failover, the pool reuses sockets bound to the old primary.
 See [[b7c1]] for the workaround.
 ```
 
-Notes live in a flat `.zettel/` directory:
+Zettel keeps the notes in one flat `.zettel/` directory:
 
 ```
 .zettel/
@@ -72,21 +73,21 @@ Notes live in a flat `.zettel/` directory:
 ```
 
 Notes connect through the frontmatter `links` field and inline `[[id]]`
-references. zettel walks the graph to compute backlinks, surface orphans,
-show a note's neighborhood, and check for broken links.
+references. Zettel walks the note graph. It computes backlinks, finds the
+orphan notes, shows the neighborhood of a note, and checks for broken links.
 
-Every note has a status: `draft` (working, usually agent-created during
-research) or `permanent` (curated, written in the author's own words).
-Promotion from draft to permanent is always a human decision — agents
-write drafts, humans build the permanent knowledge base.
+Every note has a status. A `draft` note is working material. An agent usually
+writes it during research. A `permanent` note is reviewed material, written in
+the author's own words. Only a human promotes a note from draft to permanent.
+Agents write drafts. Humans build the permanent knowledge base.
 
 ## Documentation
 
-- [What is Zettel?](docs/what-is-zettel.md) — the zettelkasten model, note format, workflow
-- [Getting Started](docs/getting-started.md) — first notes walkthrough
-- [CLI Reference](docs/cli-reference.md) — complete command documentation
+- [What is Zettel?](docs/what-is-zettel.md) — the zettelkasten model, the note format, the workflow
+- [Getting Started](docs/getting-started.md) — a walkthrough of the first notes
+- [CLI Reference](docs/cli-reference.md) — the complete command documentation
 
-Bundled docs are also browsable via `zettel docs`.
+Run `zettel docs` to read the same documentation from the binary.
 
 ## Related
 

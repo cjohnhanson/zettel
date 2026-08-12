@@ -1,9 +1,9 @@
-// Re-export the generic Selector from mdstore.
+// Re-export the Selector type from mdstore.
 pub use mdstore::selector::Selector;
 
 use crate::note::Note;
 
-/// Returns true if the note matches this selector.
+/// Return true if the note matches the selector.
 pub fn matches_note(selector: &Selector, note: &Note) -> bool {
     match selector.namespace.as_str() {
         "tag" => note
@@ -21,7 +21,7 @@ pub fn matches_note(selector: &Selector, note: &Note) -> bool {
     }
 }
 
-/// Returns true if the note matches all selectors (AND semantics).
+/// Return true if the note matches every selector.
 pub fn matches_all(selectors: &[Selector], note: &Note) -> bool {
     mdstore::selector::matches_all(selectors, note, matches_note)
 }

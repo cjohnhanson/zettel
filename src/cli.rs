@@ -11,7 +11,7 @@ use crate::{CreateNoteOptions, EditNoteOptions, ListNotesFilter, Note, Repo};
     max_term_width = 98
 )]
 pub struct Args {
-    /// Root directory of the repository (default: current directory)
+    /// The root directory of the repository. The default is the current directory.
     #[arg(long, global = true, default_value = ".")]
     pub root: Utf8PathBuf,
 
@@ -21,53 +21,53 @@ pub struct Args {
 
 #[derive(Parser)]
 pub enum Command {
-    /// Initialize zettel in the current directory
+    /// Initialize Zettel in the current directory
     Init,
 
-    /// Manage notes
+    /// Manage the notes
     #[command(subcommand)]
     Note(NoteCommand),
 
-    /// Show backlinks to a note
+    /// Show the notes that link to a note
     Backlinks(BacklinksArgs),
 
-    /// Show orphaned notes (no links in or out)
+    /// Show the notes with no links
     Orphans(OrphansArgs),
 
-    /// Search notes by regex pattern
+    /// Search the notes with a regex pattern
     Search(SearchArgs),
 
-    /// Read full content of matching notes
+    /// Show the full content of the matching notes
     Read(ReadArgs),
 
-    /// Show a note and its neighborhood (linked notes within N hops)
+    /// Show a note and the linked notes within N hops
     Context(ContextArgs),
 
-    /// Show knowledge base statistics
+    /// Show the knowledge base statistics
     Stats(StatsArgs),
 
-    /// Check for broken links and other issues
+    /// Check the notes for broken links
     Check,
 
-    /// Browse bundled documentation
+    /// Read the bundled documentation
     Docs(DocsArgs),
 }
 
 #[derive(clap::Args)]
 pub struct DocsArgs {
-    /// Topic slug to display, or "search" to search
+    /// The topic slug to show, or "search" to search the docs
     pub topic: Option<String>,
 
-    /// Search query (when topic is "search")
+    /// The search query. Use it when the topic is "search".
     pub query: Option<String>,
 }
 
 #[derive(Parser)]
 pub enum NoteCommand {
-    /// Create a new note
+    /// Create a note
     Create(NoteCreateArgs),
 
-    /// List notes
+    /// List the notes
     List(NoteListArgs),
 
     /// Show a note
@@ -82,22 +82,22 @@ pub enum NoteCommand {
 
 #[derive(Parser)]
 pub struct NoteCreateArgs {
-    /// Note title
+    /// The note title
     pub title: String,
 
-    /// Comma-separated tags
+    /// The tags; separate them with commas
     #[arg(short, long = "tag")]
     pub tag: Option<String>,
 
-    /// Comma-separated link IDs
+    /// The link IDs; separate them with commas
     #[arg(short, long)]
     pub links: Option<String>,
 
-    /// Note body text (inline)
+    /// The note body text
     #[arg(short, long)]
     pub body: Option<String>,
 
-    /// Initial status (default: draft)
+    /// The initial status. The default is draft.
     #[arg(short, long, default_value = "draft")]
     pub status: Option<String>,
 }
@@ -112,11 +112,11 @@ pub struct NoteListArgs {
     #[arg(short, long)]
     pub status: Option<String>,
 
-    /// Filter by selector (namespace:value, repeatable, ANDs together)
+    /// Filter by selector (namespace:value). Repeat the option to add selectors.
     #[arg(long = "where")]
     pub r#where: Vec<String>,
 
-    /// Output format (text or json)
+    /// The output format (text or json)
     #[arg(long, default_value = "text")]
     pub format: OutputFormat,
 }
@@ -129,56 +129,56 @@ pub enum OutputFormat {
 
 #[derive(Parser)]
 pub struct NoteShowArgs {
-    /// Note ID
+    /// The note ID
     pub id: String,
 
-    /// Output format (text or json)
+    /// The output format (text or json)
     #[arg(long, default_value = "text")]
     pub format: OutputFormat,
 
-    /// Extract a single field value
+    /// Print one field value
     #[arg(long)]
     pub field: Option<String>,
 }
 
 #[derive(Parser)]
 pub struct NoteEditArgs {
-    /// Note ID
+    /// The note ID
     pub id: String,
 
-    /// New title
+    /// The new title
     #[arg(long)]
     pub title: Option<String>,
 
-    /// New status (draft or permanent)
+    /// The new status (draft or permanent)
     #[arg(short, long)]
     pub status: Option<String>,
 
-    /// New tags (replaces existing)
+    /// Replace all tags
     #[arg(short, long = "tag")]
     pub tag: Option<String>,
 
-    /// Add a tag
+    /// Add one tag and keep the existing tags
     #[arg(long)]
     pub add_tag: Option<String>,
 
-    /// Remove a tag
+    /// Remove one tag and keep the other tags
     #[arg(long)]
     pub remove_tag: Option<String>,
 
-    /// New links (replaces existing)
+    /// Replace all links
     #[arg(short, long)]
     pub links: Option<String>,
 
-    /// Add a link
+    /// Add one link and keep the existing links
     #[arg(long)]
     pub add_link: Option<String>,
 
-    /// Remove a link
+    /// Remove one link and keep the other links
     #[arg(long)]
     pub remove_link: Option<String>,
 
-    /// Replace the entire body
+    /// Replace the whole body
     #[arg(short, long)]
     pub body: Option<String>,
 
@@ -189,26 +189,26 @@ pub struct NoteEditArgs {
 
 #[derive(Parser)]
 pub struct NoteDeleteArgs {
-    /// Note ID
+    /// The note ID
     pub id: String,
 }
 
 #[derive(Parser)]
 pub struct BacklinksArgs {
-    /// Note ID to find backlinks for
+    /// The note ID
     pub id: String,
 
-    /// Output format (text or json)
+    /// The output format (text or json)
     #[arg(long, default_value = "text")]
     pub format: OutputFormat,
 }
 
 #[derive(Parser)]
 pub struct SearchArgs {
-    /// Search pattern (regex supported)
+    /// The search pattern. Regular expressions work.
     pub pattern: String,
 
-    /// Output format (text or json)
+    /// The output format (text or json)
     #[arg(long, default_value = "text")]
     pub format: OutputFormat,
 }
@@ -226,33 +226,33 @@ pub struct ReadArgs {
 
 #[derive(Parser)]
 pub struct ContextArgs {
-    /// Note ID to explore from
+    /// The note ID to start from
     pub id: String,
 
-    /// Maximum link depth to traverse (default: 2)
+    /// The maximum link depth to traverse. The default is 2.
     #[arg(short, long, default_value = "2")]
     pub depth: usize,
 
-    /// Output format (text or json)
+    /// The output format (text or json)
     #[arg(long, default_value = "text")]
     pub format: OutputFormat,
 }
 
 #[derive(Parser)]
 pub struct OrphansArgs {
-    /// Output format (text or json)
+    /// The output format (text or json)
     #[arg(long, default_value = "text")]
     pub format: OutputFormat,
 }
 
 #[derive(Parser)]
 pub struct StatsArgs {
-    /// Output format (text or json)
+    /// The output format (text or json)
     #[arg(long, default_value = "text")]
     pub format: OutputFormat,
 }
 
-/// Run zettel with the given arguments.
+/// Run Zettel with the given arguments.
 pub fn run(args: Args) -> crate::Result<()> {
     let root = if args.root.is_relative() {
         let cwd = std::env::current_dir()?;

@@ -33,7 +33,7 @@ pub struct EditNoteOptions<'a> {
     pub append: Option<&'a str>,
 }
 
-/// A backlink: a note that references the target.
+/// A backlink. This is a note that references the target note.
 #[derive(Debug, Serialize)]
 pub struct Backlink {
     pub id: String,
@@ -87,7 +87,7 @@ impl Repo {
             return Ok(input.to_string());
         }
 
-        // 4-char prefix match
+        // 4-character prefix match
         if input.len() == 4
             && input
                 .bytes()
@@ -361,7 +361,8 @@ impl Repo {
 
     // -- Links & backlinks --
 
-    /// Find all notes that link to the given note (by ID or prefix).
+    /// Find all notes that link to the given note. The link is a full ID or a
+    /// prefix.
     pub fn backlinks(&self, id: &str) -> Result<Vec<Backlink>> {
         let resolved = self.resolve_id(id)?;
         let prefix = extract_prefix(&resolved).map(|(p, _)| p.to_string());
@@ -382,7 +383,7 @@ impl Repo {
                     || self.resolve_id(link).ok().as_deref() == Some(&resolved)
             });
 
-            // Also check for [[id]] references in the body
+            // Also check the body for [[id]] references
             let body_links = body_contains_link(&n.body, &resolved, prefix.as_deref());
 
             if links_to_target || body_links {
@@ -396,7 +397,7 @@ impl Repo {
         Ok(results)
     }
 
-    /// Find notes that have no incoming or outgoing links.
+    /// Find the notes with no incoming links and no outgoing links.
     pub fn orphans(&self) -> Result<Vec<Note>> {
         let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
         let all_ids: Vec<&str> = all_notes.iter().map(|n| n.id.as_str()).collect();
@@ -472,7 +473,7 @@ impl Repo {
         Ok(results)
     }
 
-    // -- Context (neighborhood) --
+    // -- Context (the neighborhood of a note) --
 
     pub fn context(&self, id: &str, depth: usize) -> Result<Vec<Note>> {
         let resolved = self.resolve_id(id)?;
@@ -494,7 +495,7 @@ impl Repo {
                             }
                         }
                     }
-                    // Also check body [[refs]]
+                    // Also check the body for [[ref]] links
                     for other in &all_notes {
                         if !collected.contains(&other.id)
                             && body_contains_link(&n.body, &other.id, extract_prefix(&other.id).map(|(p, _)| p))
@@ -530,7 +531,7 @@ impl Repo {
             }
         }
 
-        // Return full notes in collected order
+        // Return the full notes in the collected order
         let mut result = Vec::new();
         for id in &collected {
             if let Some(n) = all_notes.iter().find(|n| &n.id == id) {
@@ -574,7 +575,7 @@ impl Repo {
         }
         tag_counts.sort_by(|a, b| b.1.cmp(&a.1));
 
-        // Most connected (by backlink count)
+        // The most connected notes, by backlink count
         let mut backlink_counts: Vec<(String, String, usize)> = Vec::new();
         for n in &all_notes {
             let count = self.backlinks(&n.id)?.len();
@@ -612,7 +613,7 @@ impl Repo {
                 }
             }
 
-            // Check [[ref]] links in body
+            // Check the [[ref]] links in the body
             for cap in extract_body_refs(&n.body) {
                 if self.resolve_id(&cap).is_err() {
                     broken.push(BrokenLink {
@@ -672,8 +673,8 @@ fn extract_body_refs(body: &str) -> Vec<String> {
     refs
 }
 
-/// Check if a markdown body contains a `[[ref]]` link to the given ID.
-/// Matches against full ID, 4-char prefix, or slug portion.
+/// Return true if a markdown body contains a `[[ref]]` link to the given ID.
+/// The reference matches the full ID, the 4-character prefix, or the slug.
 fn body_contains_link(body: &str, full_id: &str, prefix: Option<&str>) -> bool {
     // [[full-id]]
     let full_ref = format!("[[{full_id}]]");
@@ -687,7 +688,7 @@ fn body_contains_link(body: &str, full_id: &str, prefix: Option<&str>) -> bool {
             return true;
         }
     }
-    // [[slug]] (the part after the prefix)
+    // [[slug]], the part after the prefix
     if let Some((_, slug)) = extract_prefix(full_id) {
         let slug_ref = format!("[[{slug}]]");
         if body.contains(&slug_ref) {
