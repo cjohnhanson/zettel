@@ -433,6 +433,7 @@ impl Repo {
                         links: n.frontmatter.links.clone(),
                         created: n.frontmatter.created.clone(),
                         updated: n.frontmatter.updated.clone(),
+                        extra: n.frontmatter.extra.clone(),
                     },
                     body: n.body.clone(),
                 });
@@ -544,6 +545,7 @@ impl Repo {
                         links: n.frontmatter.links.clone(),
                         created: n.frontmatter.created.clone(),
                         updated: n.frontmatter.updated.clone(),
+                        extra: n.frontmatter.extra.clone(),
                     },
                     body: n.body.clone(),
                 });

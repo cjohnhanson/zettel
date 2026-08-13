@@ -64,6 +64,10 @@ pub struct NoteFrontmatter {
     pub links: Vec<String>,
     pub created: Option<String>,
     pub updated: Option<String>,
+    /// Frontmatter keys zettel does not model. They are kept so an edit
+    /// never drops a key a user or another tool added.
+    #[serde(flatten)]
+    pub extra: serde_yml::Mapping,
 }
 
 /// A parsed note with its ID and content.
@@ -75,7 +79,7 @@ pub struct Note {
 }
 
 pub fn new_frontmatter(title: &str) -> NoteFrontmatter {
-    let now = format!("\"{}\"", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"));
+    let now = format!("{}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"));
     NoteFrontmatter {
         title: title.into(),
         status: Status::Draft,
@@ -83,11 +87,12 @@ pub fn new_frontmatter(title: &str) -> NoteFrontmatter {
         links: vec![],
         created: Some(now.clone()),
         updated: Some(now),
+        extra: serde_yml::Mapping::new(),
     }
 }
 
 pub fn update_timestamp(fm: &mut NoteFrontmatter) {
-    fm.updated = Some(format!("\"{}\"", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")));
+    fm.updated = Some(format!("{}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")));
 }
 
 /// Parse the content of a note file into frontmatter and body.
@@ -102,41 +107,69 @@ pub fn parse_note(content: &str) -> crate::error::Result<(NoteFrontmatter, Strin
 }
 
 /// Serialize a note to frontmattered markdown.
+///
+/// serde_yml does the YAML, so a title, tag, or link with a comma, a
+/// quote, a colon, or a backslash is escaped correctly. The old
+/// hand-rolled writer produced a file that no longer parsed, and one
+/// bad file broke repo-wide commands. Unknown frontmatter keys survive
+/// through the `extra` map.
 pub fn serialize_note(fm: &NoteFrontmatter, body: &str) -> String {
-    let mut s = String::from("---\n");
-    s.push_str(&format!("title: \"{}\"\n", fm.title.replace('"', "\\\"")));
-    s.push_str(&format!("status: {}\n", fm.status));
+    let now = format!("{}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"));
+    let filled = NoteFrontmatter {
+        title: fm.title.clone(),
+        status: fm.status,
+        tags: fm.tags.clone(),
+        links: fm.links.clone(),
+        created: Some(fm.created.clone().unwrap_or_else(|| now.clone())),
+        updated: Some(fm.updated.clone().unwrap_or(now)),
+        extra: fm.extra.clone(),
+    };
+    let doc = mdstore::document::Document {
+        frontmatter: filled,
+        body: body.to_string(),
+    };
+    // serialize only fails when the frontmatter cannot be represented as
+    // YAML, which a struct of strings and lists cannot.
+    mdstore::document::serialize(&doc).unwrap_or_default()
+}
 
-    if fm.tags.is_empty() {
-        s.push_str("tags: []\n");
-    } else {
-        s.push_str(&format!("tags: [{}]\n", fm.tags.join(", ")));
+#[cfg(test)]
+mod serialize_tests {
+    use super::*;
+
+    fn round_trip(fm: &NoteFrontmatter, body: &str) -> (NoteFrontmatter, String) {
+        let text = serialize_note(fm, body);
+        parse_note(&text).expect("a serialized note must parse back")
     }
 
-    if fm.links.is_empty() {
-        s.push_str("links: []\n");
-    } else {
-        s.push_str(&format!("links: [{}]\n", fm.links.join(", ")));
+    #[test]
+    fn metacharacters_in_fields_round_trip() {
+        // Commas, brackets, quotes, colons, and a backslash used to break
+        // the hand-rolled writer and produce an unparseable file.
+        let fm = NoteFrontmatter {
+            title: r#"a: "quoted", [bracket] and a \ backslash"#.to_string(),
+            status: Status::Permanent,
+            tags: vec!["a, b".to_string(), "c: d".to_string(), "[e]".to_string()],
+            links: vec!["ab12".to_string(), "x, y".to_string()],
+            created: Some("2020-01-01T00:00:00Z".to_string()),
+            updated: Some("2020-01-02T00:00:00Z".to_string()),
+            extra: serde_yml::Mapping::new(),
+        };
+        let (back, _) = round_trip(&fm, "body text");
+        assert_eq!(back.title, fm.title);
+        assert_eq!(back.tags, fm.tags);
+        assert_eq!(back.links, fm.links);
+        assert_eq!(back.status, Status::Permanent);
     }
 
-    let created = fm
-        .created
-        .clone()
-        .unwrap_or_else(|| format!("\"{}\"", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")));
-    let updated = fm
-        .updated
-        .clone()
-        .unwrap_or_else(|| format!("\"{}\"", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")));
-
-    s.push_str(&format!("created: {created}\n"));
-    s.push_str(&format!("updated: {updated}\n"));
-    s.push_str("---\n");
-
-    if !body.is_empty() {
-        s.push('\n');
-        s.push_str(body);
-        s.push('\n');
+    #[test]
+    fn unknown_frontmatter_keys_survive_an_edit() {
+        let source = "---\ntitle: t\nstatus: draft\ntags: []\nlinks: []\ncreated: 2020-01-01T00:00:00Z\nupdated: 2020-01-01T00:00:00Z\nauthor: someone\nproject: alpha\n---\n\nbody\n";
+        let (mut fm, body) = parse_note(source).unwrap();
+        assert!(fm.extra.contains_key("author"), "unknown key captured");
+        update_timestamp(&mut fm);
+        let (back, _) = round_trip(&fm, &body);
+        assert_eq!(back.extra.get("author").and_then(|v| v.as_str()), Some("someone"));
+        assert_eq!(back.extra.get("project").and_then(|v| v.as_str()), Some("alpha"));
     }
-
-    s
 }
