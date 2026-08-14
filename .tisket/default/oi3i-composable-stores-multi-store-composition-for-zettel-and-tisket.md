@@ -1,6 +1,6 @@
 ---
 title: 'composable stores: multi-store composition for zettel and tisket'
-status: todo
+status: done
 priority: '2'
 assignee: null
 due_date: null
@@ -8,7 +8,7 @@ labels:
 - feature
 depends_on: []
 created: '2026-08-14T20:27:44Z'
-updated: '2026-08-14T21:01:51Z'
+updated: '2026-08-14T21:32:06Z'
 ---
 
 ## End goal
@@ -132,3 +132,14 @@ One deviation from the artifact, decided during implementation: sharedness is a 
 1. Cargo.toml has a TEMPORARY path override to ../mdstore. Push mdstore first, merge, pin the rev, drop the override.
 2. Incident, same day: employer repository names were used as example aliases in docs, README, a library comment, the tisket issue, and the artifact. Nothing had been pushed; verified via git ls-remote, git grep against origin/main in both repos, and the PR bodies. All scrubbed to `project`/`sibling`, and the mdstore commit was amended so no local history holds them. The generative rule is now in the global config under "Compartmentalization: names travel only where they belong".
 Phase 1 landed: mdstore#2 (d87cd4a) and zettel#5 (bc5b996), both merged to main. The temporary path override is gone; zettel pins the mdstore rev. Phases 2-5 (git sources, registry, tisket adoption, blob) remain.
+## Complete (2026-08-14)
+
+All of it landed and deployed: mdstore#2 + #3, zettel#5 + #7, tisket#1. co.d flake bumped for both tools, hms run, verified on the installed binaries.
+
+Delivered beyond the local-path foundation:
+- git sources: one bare clone per URL, documents read from git objects at each consumer's declared revision, so two consumers pinning different revisions share the fetch and neither can overwrite the other. Explicit `store sync` is the only network access.
+- blob sources: s3://, gs://, https:// with an index.txt, copied into the cache by the vendor tool so the user's credentials apply.
+- registry: binds a declared URL to a local checkout; changes where a dependency resolves, never what a store declares; `check` warns on a reference that resolves only through the checkout.
+- tisket: stores.yml, a `children:` field for epics with cross-repository entries, rollup with unknown-not-dropped and cache age, read-only dependency trackers, and `store list` / `store sync` / `check` (tisket had no check surface at all before).
+
+Tests: mdstore 103 unit; zettel 18 unit + missouri 23 paths / 888 assertions; tisket 9 unit + missouri 28 paths / 974 assertions. Every new behavior has missouri coverage, including the unsynced store, revision pinning, the registry override warning, and the cross-repository epic.
