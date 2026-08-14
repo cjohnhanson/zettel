@@ -181,8 +181,50 @@ format: 2
 shared: false          # true when other people clone this store
 stores:
   - alias: project
-    path: ../project
+    path: ../project           # a directory on this machine
+  - alias: handbook
+    git: https://example.com/org/handbook
+    rev: v1.0                  # optional; the default branch without it
+  - alias: archive
+    blob: s3://bucket/notes    # object storage
 ```
+
+A shared store declares an outside dependency by URL, because a path
+reaches only this machine.
+
+## `zettel store sync`
+
+Fetch each declared remote store into the local cache. This is the only
+command that reaches the network. Every other command reads what the
+cache already holds, so an answer never changes because of a fetch that
+you did not ask for.
+
+A git store keeps one bare clone for each URL, and its notes are read
+from git objects at the revision that each store declares. Two stores
+that pin different revisions of one URL therefore share one clone. A
+blob store copies its objects into the cache with the tool for the
+scheme: `aws` for `s3://`, `gcloud` for `gs://`, and `curl` with an
+`index.txt` for `https://`.
+
+`store list` gives the age of each cache, so a stale answer looks stale.
+
+## The registry
+
+A shared store declares a dependency by URL. If the same repository is
+already checked out on this machine, bind it in
+`~/.config/mdstore/registry.yml`:
+
+```yaml
+stores:
+  - git: https://example.com/org/handbook
+    path: ~/Projects/handbook
+```
+
+The registry changes where a dependency resolves. It does not change
+what a store declares, so it cannot make one machine's links differ from
+another's. A reference that resolves only through the checkout, such as
+a reference to a note that was never committed, is a `check` finding:
+that reference works here and nowhere else.
 
 A command reads all the declared stores. A command writes only to this
 store. A note in a dependency has the ID `alias:id`. A note in a
