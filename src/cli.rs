@@ -24,9 +24,11 @@ pub enum Command {
     /// Initialize Zettel in the current directory
     Init,
 
-    /// Manage the notes
+    /// Manage the notes. The variant is boxed because NoteCommand is
+    /// far larger than the other variants, and clippy flags the size
+    /// difference.
     #[command(subcommand)]
-    Note(NoteCommand),
+    Note(Box<NoteCommand>),
 
     /// Show the notes that link to a note
     Backlinks(BacklinksArgs),
@@ -268,7 +270,7 @@ pub fn run(args: Args) -> crate::Result<()> {
 
         Command::Note(cmd) => {
             let repo = Repo::open(&root)?;
-            match cmd {
+            match *cmd {
                 NoteCommand::Create(a) => {
                     let status = a
                         .status

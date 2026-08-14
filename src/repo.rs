@@ -489,11 +489,11 @@ impl Repo {
                 // Forward links from this note
                 if let Some(n) = all_notes.iter().find(|n| &n.id == current_id) {
                     for link in &n.frontmatter.links {
-                        if let Ok(resolved_link) = self.resolve_id(link) {
-                            if !collected.contains(&resolved_link) {
-                                collected.push(resolved_link.clone());
-                                next_frontier.push(resolved_link);
-                            }
+                        if let Ok(resolved_link) = self.resolve_id(link)
+                            && !collected.contains(&resolved_link)
+                        {
+                            collected.push(resolved_link.clone());
+                            next_frontier.push(resolved_link);
                         }
                     }
                     // Also check the body for [[ref]] links
@@ -575,7 +575,7 @@ impl Repo {
                 }
             }
         }
-        tag_counts.sort_by(|a, b| b.1.cmp(&a.1));
+        tag_counts.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
 
         // The most connected notes, by backlink count
         let mut backlink_counts: Vec<(String, String, usize)> = Vec::new();
@@ -583,7 +583,7 @@ impl Repo {
             let count = self.backlinks(&n.id)?.len();
             backlink_counts.push((n.id.clone(), n.frontmatter.title.clone(), count));
         }
-        backlink_counts.sort_by(|a, b| b.2.cmp(&a.2));
+        backlink_counts.sort_by_key(|(_, _, count)| std::cmp::Reverse(*count));
 
         let orphan_count = self.orphans()?.len();
 
