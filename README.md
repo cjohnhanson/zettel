@@ -115,8 +115,15 @@ A knowledge base can link into others. Declare them in `stores.yml`:
 format: 2
 stores:
   - alias: project
-    path: ../project
+    path: ../project                            # this machine
+  - alias: handbook
+    git: https://example.com/org/handbook       # a git repository
+  - alias: archive
+    blob: s3://bucket/notes                     # object storage
 ```
+
+`zettel store sync` fetches the remote stores into a local cache. It is
+the only command that reaches the network.
 
 A reference then names the store. Write `[[project:a3f2]]` in a body,
 `project:a3f2` in `links:`, or `citation:project:a3f2` in a provenance

@@ -4,6 +4,15 @@ setup:
 
 packages:
   - jq
+  - git
 
 env:
   NO_COLOR: "1"
+  # Each test path gets its own cache and registry, so a remote-store
+  # test never reads the user's real cache and never writes to it.
+  MDSTORE_CACHE_DIR: ".mdstore-cache"
+  MDSTORE_REGISTRY: ".mdstore-registry.yml"
+  GIT_AUTHOR_NAME: "test"
+  GIT_AUTHOR_EMAIL: "test@example.com"
+  GIT_COMMITTER_NAME: "test"
+  GIT_COMMITTER_EMAIL: "test@example.com"
