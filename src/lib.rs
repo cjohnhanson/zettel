@@ -7,6 +7,7 @@ pub mod note;
 pub mod provenance;
 pub mod repo;
 pub mod selector;
+pub mod workspace;
 
 pub use config::ZettelConfig;
 pub use error::{Error, Result};

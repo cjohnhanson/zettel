@@ -45,6 +45,7 @@ zettel search <pattern>                      # search all notes with a regex
 zettel backlinks <id>                        # show the notes that link to this note
 zettel context <id> --depth N                # show the notes within N hops
 zettel orphans                               # show the notes with no links
+zettel store list                            # show this store and the stores it declares
 zettel check                                 # check for broken links and invalid provenance
 zettel migrate                               # convert pre-provenance notes (status keys)
 zettel stats                                 # show counts, tag distribution, and connectivity
@@ -105,6 +106,31 @@ which writes a `reviewed=` stamp. A later reader filters by all of this:
 `zettel read --provenance human,citation,reviewed` returns only the text a
 human wrote, quoted, or vouched for. The labels are convention, not proof —
 the same trust model as the files themselves.
+
+## Composed stores
+
+A knowledge base can link into others. Declare them in `stores.yml`:
+
+```yaml
+format: 2
+stores:
+  - alias: project
+    path: ../project
+```
+
+A reference then names the store. Write `[[project:a3f2]]` in a body,
+`project:a3f2` in `links:`, or `citation:project:a3f2` in a provenance
+marker. A reference with no alias stays local.
+
+The declarations set the direction. A personal knowledge base declares
+the repositories that it annotates. A repository does not declare the
+personal knowledge base. It cannot: the target does not exist for the
+other users who clone the repository. Two repositories can declare each
+other, because each one is equally reachable.
+
+Each command runs from one store. It reads that store and the stores
+that the store declares. Thus one note has different backlinks in
+different stores. Dependency stores are read-only.
 
 ## Documentation
 

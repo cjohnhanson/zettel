@@ -40,6 +40,38 @@ Provenance is a label, not a lock. A later reader — usually an agent —
 filters or weighs text by it: human text is ground truth, a citation points
 at its source, an unreviewed inference is a hypothesis.
 
+## Composed stores
+
+A knowledge base can declare other knowledge bases it links into. The
+declarations live in `stores.yml`, each under a local alias:
+
+```yaml
+format: 2
+stores:
+  - alias: project
+    path: ../project
+```
+
+A reference then names the store. Write `[[project:a3f2]]` in a body,
+`project:a3f2` in `links:`, or `citation:project:a3f2` in a provenance
+marker. A reference with no alias stays local to the note that holds it.
+
+**The declarations set the direction.** A store links only to the stores
+that it declares. No store makes itself a target. A personal knowledge
+base declares the repositories that it annotates. A repository does not
+declare the personal knowledge base. It cannot: the target does not
+exist for the other users who clone the repository. Two repositories can
+declare each other, because each one is equally reachable.
+
+Each command runs from one store. It reads that store and the stores
+that the store declares. From the personal store, a note in a repository
+has the ID `project:a3f2`, and the backlinks include the personal
+annotations. From the repository, those annotations do not exist. To
+change a note in a dependency store, run the command from that store.
+
+If other users clone your store, declare `shared: true`. Zettel then
+makes sure that every dependency is reachable for each clone.
+
 ## What it is for
 
 Use Zettel for design rationale, integration problems, and debugging notes.

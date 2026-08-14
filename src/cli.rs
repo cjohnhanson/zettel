@@ -62,6 +62,9 @@ pub enum Command {
     /// Show the knowledge base statistics
     Stats(StatsArgs),
 
+    /// Show the declared stores and what this vantage can see
+    Store(StoreArgs),
+
     /// Check the notes for broken links and invalid provenance
     Check,
 
@@ -100,6 +103,20 @@ pub enum NoteCommand {
 
     /// List the provenance spans of a note, or approve agent spans
     Review(NoteReviewArgs),
+}
+
+impl NoteCommand {
+    /// The note a mutating subcommand targets, if it mutates one.
+    fn target_id(&self) -> Option<&str> {
+        match self {
+            NoteCommand::Edit(a) => Some(&a.id),
+            NoteCommand::Delete(a) => Some(&a.id),
+            // Review only mutates with --approve; the listing form is a
+            // read and may name a dependency's note.
+            NoteCommand::Review(a) if a.approve.is_some() => Some(&a.id),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Parser)]
@@ -291,6 +308,25 @@ pub struct OrphansArgs {
 }
 
 #[derive(Parser)]
+pub struct StoreArgs {
+    #[command(subcommand)]
+    pub command: StoreCommand,
+}
+
+#[derive(Parser)]
+pub enum StoreCommand {
+    /// List the stores this vantage can see
+    List(StoreListArgs),
+}
+
+#[derive(Parser)]
+pub struct StoreListArgs {
+    /// The output format (text or json)
+    #[arg(long, default_value = "text")]
+    pub format: OutputFormat,
+}
+
+#[derive(Parser)]
 pub struct StatsArgs {
     /// The output format (text or json)
     #[arg(long, default_value = "text")]
@@ -320,12 +356,27 @@ pub fn run(args: Args) -> crate::Result<()> {
 
         Command::GenCompletions { shell } => {
             use clap::CommandFactory as _;
-            clap_complete::generate(shell, &mut Args::command(), "zettel", &mut std::io::stdout());
+            clap_complete::generate(
+                shell,
+                &mut Args::command(),
+                "zettel",
+                &mut std::io::stdout(),
+            );
             Ok(())
         }
 
         Command::Note(cmd) => {
             let repo = Repo::open(&root)?;
+            // Dependency stores are read-only through the closure: a
+            // write must run from the store that owns the note.
+            if let Some(id) = cmd.target_id() {
+                let ws = crate::workspace::Workspace::open(&root)?;
+                if !ws.is_single_store()
+                    && let Ok(view) = ws.find(id)
+                {
+                    ws.ensure_writable(&view, id)?;
+                }
+            }
             match *cmd {
                 NoteCommand::Create(a) => {
                     let id = repo.create_note(
@@ -361,13 +412,18 @@ pub fn run(args: Args) -> crate::Result<()> {
                     Ok(())
                 }
                 NoteCommand::Show(a) => {
-                    let n = repo.find_note(&a.id)?;
+                    // Reads reach the whole closure, so an ID printed by
+                    // any command can be pasted back into show.
+                    let ws = crate::workspace::Workspace::open(&root)?;
+                    let view = ws.find(&a.id)?;
                     if let Some(field) = &a.field {
-                        print_note_field(&n, field)?;
+                        print_note_field(view.note, field)?;
                     } else {
                         match a.format {
-                            OutputFormat::Json => print_note_json(&n),
-                            OutputFormat::Text => print_note_show(&n),
+                            OutputFormat::Json => {
+                                print_note_json_qualified(view.note, &view.qualified)
+                            }
+                            OutputFormat::Text => print_note_show(view.note, &view.qualified),
                         }
                     }
                     Ok(())
@@ -436,29 +492,43 @@ pub fn run(args: Args) -> crate::Result<()> {
         }
 
         Command::Backlinks(a) => {
-            let repo = Repo::open(&root)?;
-            let backlinks = repo.backlinks(&a.id)?;
+            Repo::open(&root)?;
+            let ws = crate::workspace::Workspace::open(&root)?;
+            let target = ws.find(&a.id)?;
+            let backlinks = ws.backlinks(target.id);
             match a.format {
                 OutputFormat::Json => {
-                    let json = serde_json::to_string_pretty(&backlinks).unwrap();
-                    println!("{json}");
+                    let arr: Vec<serde_json::Value> = backlinks
+                        .iter()
+                        .map(|v| {
+                            serde_json::json!({
+                                "id": v.qualified,
+                                "title": v.note.frontmatter.title,
+                                "store": ws.store_label(v.id),
+                            })
+                        })
+                        .collect();
+                    println!("{}", serde_json::to_string_pretty(&arr).unwrap());
                 }
                 OutputFormat::Text => {
-                    for bl in &backlinks {
-                        println!("{}  {}", bl.id, bl.title);
+                    for v in &backlinks {
+                        println!("{}  {}", v.qualified, v.note.frontmatter.title);
                     }
                 }
             }
+            print_partial(&ws);
             Ok(())
         }
 
         Command::Orphans(a) => {
-            let repo = Repo::open(&root)?;
-            let orphans = repo.orphans()?;
+            Repo::open(&root)?;
+            let ws = crate::workspace::Workspace::open(&root)?;
+            let orphans = ws.orphans();
             match a.format {
-                OutputFormat::Json => print_note_list_json(&orphans),
-                OutputFormat::Text => print_note_list(&orphans),
+                OutputFormat::Json => print_view_list_json(&ws, &orphans),
+                OutputFormat::Text => print_view_list(&orphans),
             }
+            print_partial(&ws);
             Ok(())
         }
 
@@ -547,16 +617,22 @@ pub fn run(args: Args) -> crate::Result<()> {
         }
 
         Command::Context(a) => {
-            let repo = Repo::open(&root)?;
-            let notes = repo.context(&a.id, a.depth)?;
+            Repo::open(&root)?;
+            let ws = crate::workspace::Workspace::open(&root)?;
+            let start = ws.find(&a.id)?;
+            let views = ws.neighborhood(start.id, a.depth);
             match a.format {
-                OutputFormat::Json => print_note_list_json(&notes),
+                OutputFormat::Json => print_view_list_json(&ws, &views),
                 OutputFormat::Text => {
-                    for (i, n) in notes.iter().enumerate() {
+                    for (i, v) in views.iter().enumerate() {
                         if i > 0 {
                             println!();
                         }
-                        println!("--- {} ---", n.id);
+                        let n = v.note;
+                        // Foreign notes print store-qualified: an agent
+                        // reading this stream must be able to tell a
+                        // dependency's text from the vantage's own.
+                        println!("--- {} ---", v.qualified);
                         println!("title: {}", n.frontmatter.title);
                         println!("provenance: {}", default_provenance_display(n));
                         if !n.frontmatter.tags.is_empty() {
@@ -572,12 +648,45 @@ pub fn run(args: Args) -> crate::Result<()> {
                     }
                 }
             }
+            print_partial(&ws);
+            Ok(())
+        }
+
+        Command::Store(a) => {
+            Repo::open(&root)?;
+            let ws = crate::workspace::Workspace::open(&root)?;
+            match a.command {
+                StoreCommand::List(args) => {
+                    let members = ws.store_members();
+                    match args.format {
+                        OutputFormat::Json => {
+                            println!("{}", serde_json::to_string_pretty(&members).unwrap());
+                        }
+                        OutputFormat::Text => {
+                            for m in &members {
+                                let label = if m.alias.is_empty() {
+                                    "(this store)".to_string()
+                                } else {
+                                    m.alias.clone()
+                                };
+                                let state = match &m.unavailable {
+                                    Some(why) => format!("unavailable: {why}"),
+                                    None => format!("{} note(s)", m.notes),
+                                };
+                                println!("{label}  {}  {state}", m.source);
+                            }
+                        }
+                    }
+                }
+            }
             Ok(())
         }
 
         Command::Check => {
             let repo = Repo::open(&root)?;
-            let broken = repo.check()?;
+            let mut broken = repo.check()?;
+            let ws = crate::workspace::Workspace::open(&root)?;
+            broken.extend(store_findings(&ws, &root));
             if broken.is_empty() {
                 println!("no broken links");
             } else {
@@ -707,6 +816,116 @@ fn default_provenance_display(n: &Note) -> &str {
     n.frontmatter.provenance.as_deref().unwrap_or("unknown")
 }
 
+/// Print the notes of a closure, each with the ID it answers to from
+/// this vantage.
+fn print_view_list(views: &[crate::workspace::View<'_>]) {
+    for v in views {
+        let tags = if v.note.frontmatter.tags.is_empty() {
+            String::new()
+        } else {
+            format!("  [{}]", v.note.frontmatter.tags.join(", "))
+        };
+        println!(
+            "{}  {}{tags}  {}",
+            v.qualified,
+            default_provenance_display(v.note),
+            v.note.frontmatter.title
+        );
+    }
+}
+
+fn print_view_list_json(ws: &crate::workspace::Workspace, views: &[crate::workspace::View<'_>]) {
+    let arr: Vec<serde_json::Value> = views
+        .iter()
+        .map(|v| {
+            let mut json = note_to_json(v.note);
+            let obj = json.as_object_mut().unwrap();
+            obj.insert("id".into(), serde_json::json!(v.qualified));
+            obj.insert("store".into(), serde_json::json!(ws.store_label(v.id)));
+            json
+        })
+        .collect();
+    println!("{}", serde_json::to_string_pretty(&arr).unwrap());
+}
+
+/// A graph answer computed over an incomplete closure is not wrong-but-
+/// close; it is wrong. Say so rather than presenting it as whole.
+fn print_partial(ws: &crate::workspace::Workspace) {
+    let missing = ws.missing();
+    if !missing.is_empty() {
+        eprintln!("partial — unreachable store(s): {}", missing.join(", "));
+    }
+}
+
+/// Findings that only the store layer can see.
+fn store_findings(
+    ws: &crate::workspace::Workspace,
+    root: &camino::Utf8Path,
+) -> Vec<crate::BrokenLink> {
+    let mut findings = Vec::new();
+
+    // Every reference that named no note, local or cross-store. One
+    // resolution path, so a link that works cannot be reported broken.
+    for (view, target) in ws.dangling() {
+        // Where the reference was written, so the reader knows what to
+        // edit: a frontmatter links entry or a [[ref]] in the body.
+        let location = if view.note.frontmatter.links.iter().any(|l| l == &target) {
+            "frontmatter"
+        } else {
+            "body"
+        };
+        findings.push(crate::BrokenLink {
+            source_id: view.qualified.clone(),
+            source_title: view.note.frontmatter.title.clone(),
+            target,
+            location: location.to_string(),
+        });
+    }
+
+    // Declarations other clones could not follow.
+    for (alias, why) in ws.unshareable(root) {
+        findings.push(crate::BrokenLink {
+            source_id: "stores.yml".to_string(),
+            source_title: "store declarations".to_string(),
+            target: format!("{alias}: {why}"),
+            location: "declaration".to_string(),
+        });
+    }
+
+    // A store that is declared but not there.
+    for alias in ws.missing() {
+        findings.push(crate::BrokenLink {
+            source_id: "stores.yml".to_string(),
+            source_title: "store declarations".to_string(),
+            target: alias,
+            location: "unreachable store".to_string(),
+        });
+    }
+
+    // A citation key that a newly declared alias now shadows: it used to
+    // be an opaque external key and now reads as a store reference.
+    for (note_id, source) in ws.shadowed_citations() {
+        findings.push(crate::BrokenLink {
+            source_id: note_id,
+            source_title: "citation".to_string(),
+            target: format!("'{source}' now reads as a store reference"),
+            location: "shadowed citation".to_string(),
+        });
+    }
+
+    // Files the guarded scan refused to read.
+    for skipped in ws.skipped() {
+        findings.push(crate::BrokenLink {
+            source_id: "store".to_string(),
+            source_title: "skipped file".to_string(),
+            target: skipped.clone(),
+            location: "scan".to_string(),
+        });
+    }
+
+    findings
+}
+
 /// The first line of a span, shortened for the review listing.
 fn span_excerpt(text: &str) -> String {
     let first = text.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
@@ -733,7 +952,13 @@ fn note_to_json(n: &Note) -> serde_json::Value {
     })
 }
 
-fn print_note_json(n: &Note) {
+/// Show a note under the ID it answers to from this vantage.
+fn print_note_json_qualified(n: &Note, qualified: &str) {
+    print_note_json_with_id(n, qualified)
+}
+
+
+fn print_note_json_with_id(n: &Note, qualified: &str) {
     // `show --format json` carries the resolved spans so an agent can
     // treat each piece of text by its provenance.
     let spans: Vec<serde_json::Value> =
@@ -748,14 +973,14 @@ fn print_note_json(n: &Note) {
             })
             .collect();
     let mut json = note_to_json(n);
-    json.as_object_mut()
-        .unwrap()
-        .insert("spans".into(), serde_json::Value::Array(spans));
+    let obj = json.as_object_mut().unwrap();
+    obj.insert("id".into(), serde_json::json!(qualified));
+    obj.insert("spans".into(), serde_json::Value::Array(spans));
     println!("{}", serde_json::to_string_pretty(&json).unwrap());
 }
 
-fn print_note_show(n: &Note) {
-    println!("{}", n.id);
+fn print_note_show(n: &Note, qualified: &str) {
+    println!("{qualified}");
     println!();
     println!("  {:<14}{}", "Title:", n.frontmatter.title);
     println!("  {:<14}{}", "Provenance:", default_provenance_display(n));
