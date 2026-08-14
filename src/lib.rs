@@ -6,6 +6,7 @@ pub mod mangen;
 pub mod note;
 pub mod provenance;
 pub mod repo;
+pub mod serve;
 pub mod selector;
 pub mod workspace;
 
