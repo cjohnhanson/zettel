@@ -16,10 +16,13 @@ camino = { version = "1", features = ["serde1"] }
 clap = { version = "4", features = ["derive", "env", "unicode", "wrap_help"] }
 clap_complete = "4"
 clap_mangen = "0.2"
-mdstore = { git = "https://github.com/cjohnhanson/mdstore", rev = "4235eaa" }
+mdstore = { git = "https://github.com/cjohnhanson/mdstore", rev = "ddfeb05", features = ["mcp"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yml = "0.0"
 thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
+rmcp = { version = "3", features = ["server", "transport-io", "transport-streamable-http-server"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "signal", "net"] }
+axum = "0.8"

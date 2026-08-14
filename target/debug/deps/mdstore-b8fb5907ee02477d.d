@@ -1,0 +1,16 @@
+/Users/codyhanson/Projects/zettel/target/debug/deps/mdstore-b8fb5907ee02477d.d: /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/lib.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/blob.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/document.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/error.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/git.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/mcp.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/provenance.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/registry.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/selector.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/slug.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/snapshot.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/store.rs
+
+/Users/codyhanson/Projects/zettel/target/debug/deps/libmdstore-b8fb5907ee02477d.rmeta: /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/lib.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/blob.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/document.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/error.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/git.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/mcp.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/provenance.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/registry.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/selector.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/slug.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/snapshot.rs /Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/store.rs
+
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/lib.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/blob.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/document.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/error.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/git.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/mcp.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/provenance.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/registry.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/selector.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/slug.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/snapshot.rs:
+/Users/codyhanson/.cargo/git/checkouts/mdstore-2fcee019e8e2486a/ddfeb05/src/store.rs:
