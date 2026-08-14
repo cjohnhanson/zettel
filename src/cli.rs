@@ -317,6 +317,9 @@ pub struct StoreArgs {
 pub enum StoreCommand {
     /// List the stores this vantage can see
     List(StoreListArgs),
+
+    /// Fetch the declared remote stores into the local cache
+    Sync,
 }
 
 #[derive(Parser)]
@@ -656,6 +659,27 @@ pub fn run(args: Args) -> crate::Result<()> {
             Repo::open(&root)?;
             let ws = crate::workspace::Workspace::open(&root)?;
             match a.command {
+                StoreCommand::Sync => {
+                    // The one command that reaches the network.
+                    let ws = crate::workspace::Workspace::open_fetching(&root)?;
+                    let results = ws.sync_all();
+                    if results.is_empty() {
+                        println!("no remote stores declared");
+                    }
+                    let mut failed = false;
+                    for (alias, outcome) in results {
+                        match outcome {
+                            Ok(()) => println!("{alias}  synced"),
+                            Err(e) => {
+                                failed = true;
+                                eprintln!("{alias}  failed: {e}");
+                            }
+                        }
+                    }
+                    if failed {
+                        std::process::exit(1);
+                    }
+                }
                 StoreCommand::List(args) => {
                     let members = ws.store_members();
                     match args.format {
@@ -673,7 +697,14 @@ pub fn run(args: Args) -> crate::Result<()> {
                                     Some(why) => format!("unavailable: {why}"),
                                     None => format!("{} note(s)", m.notes),
                                 };
-                                println!("{label}  {}  {state}", m.source);
+                                // A remote store answers from a cache, so
+                                // its age belongs next to its content.
+                                let age = match (&m.remote, &m.age) {
+                                    (true, Some(age)) => format!("  synced {age}"),
+                                    (true, None) => "  synced (age unknown)".to_string(),
+                                    _ => String::new(),
+                                };
+                                println!("{label}  {}  {state}{age}", m.source);
                             }
                         }
                     }
@@ -910,6 +941,17 @@ fn store_findings(
             source_title: "citation".to_string(),
             target: format!("'{source}' now reads as a store reference"),
             location: "shadowed citation".to_string(),
+        });
+    }
+
+    // A reference that resolves only because the registry redirected a
+    // dependency to a local checkout. It works here and nowhere else.
+    for (note_id, target) in ws.override_only_refs(root) {
+        findings.push(crate::BrokenLink {
+            source_id: note_id,
+            source_title: "registry override".to_string(),
+            target: format!("'{target}' resolves only through a local checkout"),
+            location: "override".to_string(),
         });
     }
 
