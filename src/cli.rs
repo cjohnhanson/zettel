@@ -569,51 +569,28 @@ pub fn run(args: Args) -> crate::Result<()> {
 
         Command::Read(a) => {
             let repo = Repo::open(&root)?;
-            let notes = repo.list_notes(&ListNotesFilter {
-                tag: a.tag.as_deref(),
-                provenance: a.provenance.as_deref(),
-                unreviewed: false,
-            })?;
-            let tokens: Option<Vec<&str>> = a
-                .provenance
-                .as_deref()
-                .map(|t| t.split(',').map(str::trim).collect());
+            let notes = repo.read(a.tag.as_deref(), a.provenance.as_deref())?;
             for n in &notes {
                 println!("--- {} ---", n.id);
-                println!("title: {}", n.frontmatter.title);
-                println!("provenance: {}", default_provenance_display(n));
-                if !n.frontmatter.tags.is_empty() {
-                    println!("tags: {}", n.frontmatter.tags.join(", "));
+                println!("title: {}", n.title);
+                println!("provenance: {}", n.provenance);
+                if !n.tags.is_empty() {
+                    println!("tags: {}", n.tags.join(", "));
                 }
-                if !n.frontmatter.links.is_empty() {
-                    println!("links: {}", n.frontmatter.links.join(", "));
+                if !n.links.is_empty() {
+                    println!("links: {}", n.links.join(", "));
                 }
                 println!();
-                match &tokens {
-                    // No filter: the whole body, markers and all.
-                    None => {
-                        if !n.body.is_empty() {
-                            println!("{}", n.body);
-                            println!();
-                        }
+                for span in &n.spans {
+                    // An unfiltered read prints the body as written. A
+                    // filtered read labels each span it selected.
+                    if !span.whole_body {
+                        println!("[{}]", span.provenance);
                     }
-                    // Filtered: only the matching spans, each labeled.
-                    Some(tokens) => {
-                        let spans = crate::provenance::resolve_spans_lenient(
-                            n.frontmatter.provenance.as_deref(),
-                            &n.body,
-                        );
-                        for s in spans
-                            .iter()
-                            .filter(|s| crate::provenance::matches_any(s.marker.as_ref(), tokens))
-                        {
-                            println!("[{}]", crate::provenance::display(s.marker.as_ref()));
-                            if !s.text.is_empty() {
-                                println!("{}", s.text);
-                            }
-                            println!();
-                        }
+                    if !span.text.is_empty() {
+                        println!("{}", span.text);
                     }
+                    println!();
                 }
             }
             Ok(())
@@ -717,7 +694,7 @@ pub fn run(args: Args) -> crate::Result<()> {
             let repo = Repo::open(&root)?;
             let mut broken = repo.check()?;
             let ws = crate::workspace::Workspace::open(&root)?;
-            broken.extend(store_findings(&ws, &root));
+            broken.extend(ws.check(&root));
             if broken.is_empty() {
                 println!("no broken links");
             } else {
@@ -889,85 +866,6 @@ fn print_partial(ws: &crate::workspace::Workspace) {
 }
 
 /// Findings that only the store layer can see.
-fn store_findings(
-    ws: &crate::workspace::Workspace,
-    root: &camino::Utf8Path,
-) -> Vec<crate::BrokenLink> {
-    let mut findings = Vec::new();
-
-    // Every reference that named no note, local or cross-store. One
-    // resolution path, so a link that works cannot be reported broken.
-    for (view, target) in ws.dangling() {
-        // Where the reference was written, so the reader knows what to
-        // edit: a frontmatter links entry or a [[ref]] in the body.
-        let location = if view.note.frontmatter.links.iter().any(|l| l == &target) {
-            "frontmatter"
-        } else {
-            "body"
-        };
-        findings.push(crate::BrokenLink {
-            source_id: view.qualified.clone(),
-            source_title: view.note.frontmatter.title.clone(),
-            target,
-            location: location.to_string(),
-        });
-    }
-
-    // Declarations other clones could not follow.
-    for (alias, why) in ws.unshareable(root) {
-        findings.push(crate::BrokenLink {
-            source_id: "stores.yml".to_string(),
-            source_title: "store declarations".to_string(),
-            target: format!("{alias}: {why}"),
-            location: "declaration".to_string(),
-        });
-    }
-
-    // A store that is declared but not there.
-    for alias in ws.missing() {
-        findings.push(crate::BrokenLink {
-            source_id: "stores.yml".to_string(),
-            source_title: "store declarations".to_string(),
-            target: alias,
-            location: "unreachable store".to_string(),
-        });
-    }
-
-    // A citation key that a newly declared alias now shadows: it used to
-    // be an opaque external key and now reads as a store reference.
-    for (note_id, source) in ws.shadowed_citations() {
-        findings.push(crate::BrokenLink {
-            source_id: note_id,
-            source_title: "citation".to_string(),
-            target: format!("'{source}' now reads as a store reference"),
-            location: "shadowed citation".to_string(),
-        });
-    }
-
-    // A reference that resolves only because the registry redirected a
-    // dependency to a local checkout. It works here and nowhere else.
-    for (note_id, target) in ws.override_only_refs(root) {
-        findings.push(crate::BrokenLink {
-            source_id: note_id,
-            source_title: "registry override".to_string(),
-            target: format!("'{target}' resolves only through a local checkout"),
-            location: "override".to_string(),
-        });
-    }
-
-    // Files the guarded scan refused to read.
-    for skipped in ws.skipped() {
-        findings.push(crate::BrokenLink {
-            source_id: "store".to_string(),
-            source_title: "skipped file".to_string(),
-            target: skipped.clone(),
-            location: "scan".to_string(),
-        });
-    }
-
-    findings
-}
-
 /// The first line of a span, shortened for the review listing.
 fn span_excerpt(text: &str) -> String {
     let first = text.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
@@ -984,14 +882,8 @@ fn print_note_list_json(notes: &[Note]) {
 }
 
 fn note_to_json(n: &Note) -> serde_json::Value {
-    serde_json::json!({
-        "id": n.id,
-        "title": n.frontmatter.title,
-        "provenance": n.frontmatter.provenance,
-        "tags": n.frontmatter.tags,
-        "links": n.frontmatter.links,
-        "body": n.body,
-    })
+    let id = n.id.clone();
+    serde_json::to_value(n.view(&id)).unwrap_or_default()
 }
 
 /// Show a note under the ID it answers to from this vantage.
@@ -1001,23 +893,7 @@ fn print_note_json_qualified(n: &Note, qualified: &str) {
 
 
 fn print_note_json_with_id(n: &Note, qualified: &str) {
-    // `show --format json` carries the resolved spans so an agent can
-    // treat each piece of text by its provenance.
-    let spans: Vec<serde_json::Value> =
-        crate::provenance::resolve_spans_lenient(n.frontmatter.provenance.as_deref(), &n.body)
-            .iter()
-            .map(|s| {
-                serde_json::json!({
-                    "provenance": crate::provenance::display(s.marker.as_ref()),
-                    "from_default": s.from_default,
-                    "text": s.text,
-                })
-            })
-            .collect();
-    let mut json = note_to_json(n);
-    let obj = json.as_object_mut().unwrap();
-    obj.insert("id".into(), serde_json::json!(qualified));
-    obj.insert("spans".into(), serde_json::Value::Array(spans));
+    let json = serde_json::to_value(n.view(qualified)).unwrap_or_default();
     println!("{}", serde_json::to_string_pretty(&json).unwrap());
 }
 
