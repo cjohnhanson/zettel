@@ -506,6 +506,92 @@ impl Workspace {
         found
     }
 
+    /// Every problem in the closure, as one list.
+    ///
+    /// This is the whole of `check`. Each interface presents the same
+    /// findings: the CLI prints them, and a server returns them. A
+    /// finding assembled in one interface and not the other is how the
+    /// two drift apart.
+    pub fn check(&self, root: &Utf8Path) -> Vec<crate::BrokenLink> {
+        let mut findings = Vec::new();
+
+        // Every reference that named no note, local or cross-store. One
+        // resolution path, so a link that works cannot be reported
+        // broken.
+        for (view, target) in self.dangling() {
+            // Where the reference was written, so the reader knows what
+            // to edit: a frontmatter links entry or a [[ref]] in the
+            // body.
+            let location = if view.note.frontmatter.links.iter().any(|l| l == &target) {
+                "frontmatter"
+            } else {
+                "body"
+            };
+            findings.push(crate::BrokenLink {
+                source_id: view.qualified.clone(),
+                source_title: view.note.frontmatter.title.clone(),
+                target,
+                location: location.to_string(),
+            });
+        }
+
+        // Declarations other clones could not follow.
+        for (alias, why) in self.unshareable(root) {
+            findings.push(crate::BrokenLink {
+                source_id: "stores.yml".to_string(),
+                source_title: "store declarations".to_string(),
+                target: format!("{alias}: {why}"),
+                location: "declaration".to_string(),
+            });
+        }
+
+        // A store that is declared but not there.
+        for alias in self.missing() {
+            findings.push(crate::BrokenLink {
+                source_id: "stores.yml".to_string(),
+                source_title: "store declarations".to_string(),
+                target: alias,
+                location: "unreachable store".to_string(),
+            });
+        }
+
+        // A citation key that a newly declared alias now shadows: it
+        // used to be an opaque external key and now reads as a store
+        // reference.
+        for (note_id, source) in self.shadowed_citations() {
+            findings.push(crate::BrokenLink {
+                source_id: note_id,
+                source_title: "citation".to_string(),
+                target: format!("'{source}' now reads as a store reference"),
+                location: "shadowed citation".to_string(),
+            });
+        }
+
+        // A reference that resolves only because the registry
+        // redirected a dependency to a local checkout. It works here
+        // and nowhere else.
+        for (note_id, target) in self.override_only_refs(root) {
+            findings.push(crate::BrokenLink {
+                source_id: note_id,
+                source_title: "registry override".to_string(),
+                target: format!("'{target}' resolves only through a local checkout"),
+                location: "override".to_string(),
+            });
+        }
+
+        // Files the guarded scan refused to read.
+        for skipped in self.skipped() {
+            findings.push(crate::BrokenLink {
+                source_id: "store".to_string(),
+                source_title: "skipped file".to_string(),
+                target: skipped.clone(),
+                location: "scan".to_string(),
+            });
+        }
+
+        findings
+    }
+
     /// The vantage store's root directory.
     pub fn root(&self) -> Utf8PathBuf {
         let root = self

@@ -1029,3 +1029,92 @@ fn body_contains_link(body: &str, full_id: &str, prefix: Option<&str>) -> bool {
     }
     false
 }
+
+/// One note prepared for reading: its identity, its frontmatter
+/// summary, and the spans an interface should show.
+///
+/// `read` returns this so the CLI and a server present the same
+/// content. Only the rendering differs.
+#[derive(Debug, Serialize)]
+pub struct ReadNote {
+    pub id: String,
+    pub title: String,
+    pub provenance: String,
+    pub tags: Vec<String>,
+    pub links: Vec<String>,
+    /// The spans to show. With no filter this holds one span carrying
+    /// the whole body, so a reader never has to reassemble it.
+    pub spans: Vec<ReadSpan>,
+}
+
+/// One span of a note that a read returns.
+#[derive(Debug, Serialize)]
+pub struct ReadSpan {
+    /// The resolved provenance, or `unknown`.
+    pub provenance: String,
+    /// True when the span carries the whole unfiltered body.
+    pub whole_body: bool,
+    pub text: String,
+}
+
+impl Repo {
+    /// Read the matching notes, with the spans a provenance filter
+    /// selects.
+    ///
+    /// With no filter, each note gives one span holding its whole body,
+    /// markers included. With a filter, each note gives only the spans
+    /// that match, and a note with no matching span is left out.
+    pub fn read(&self, tag: Option<&str>, provenance: Option<&str>) -> Result<Vec<ReadNote>> {
+        let notes = self.list_notes(&ListNotesFilter {
+            tag,
+            provenance,
+            unreviewed: false,
+        })?;
+        let tokens: Option<Vec<&str>> = provenance.map(|t| t.split(',').map(str::trim).collect());
+
+        let mut out = Vec::new();
+        for n in notes {
+            let spans = match &tokens {
+                None => {
+                    let mut spans = Vec::new();
+                    if !n.body.is_empty() {
+                        spans.push(ReadSpan {
+                            provenance: n
+                                .frontmatter
+                                .provenance
+                                .clone()
+                                .unwrap_or_else(|| "unknown".to_string()),
+                            whole_body: true,
+                            text: n.body.clone(),
+                        });
+                    }
+                    spans
+                }
+                Some(tokens) => crate::provenance::resolve_spans_lenient(
+                    n.frontmatter.provenance.as_deref(),
+                    &n.body,
+                )
+                .iter()
+                .filter(|s| crate::provenance::matches_any(s.marker.as_ref(), tokens))
+                .map(|s| ReadSpan {
+                    provenance: crate::provenance::display(s.marker.as_ref()),
+                    whole_body: false,
+                    text: s.text.clone(),
+                })
+                .collect(),
+            };
+            out.push(ReadNote {
+                id: n.id,
+                title: n.frontmatter.title,
+                provenance: n
+                    .frontmatter
+                    .provenance
+                    .unwrap_or_else(|| "unknown".to_string()),
+                tags: n.frontmatter.tags,
+                links: n.frontmatter.links,
+                spans,
+            });
+        }
+        Ok(out)
+    }
+}
