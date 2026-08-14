@@ -5,8 +5,9 @@ use chrono::Utc;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// The status of a note.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Status {
+    #[default]
     Draft,
     Permanent,
 }
@@ -42,12 +43,6 @@ impl<'de> Deserialize<'de> for Status {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
         s.parse().map_err(serde::de::Error::custom)
-    }
-}
-
-impl Default for Status {
-    fn default() -> Self {
-        Self::Draft
     }
 }
 
@@ -169,7 +164,13 @@ mod serialize_tests {
         assert!(fm.extra.contains_key("author"), "unknown key captured");
         update_timestamp(&mut fm);
         let (back, _) = round_trip(&fm, &body);
-        assert_eq!(back.extra.get("author").and_then(|v| v.as_str()), Some("someone"));
-        assert_eq!(back.extra.get("project").and_then(|v| v.as_str()), Some("alpha"));
+        assert_eq!(
+            back.extra.get("author").and_then(|v| v.as_str()),
+            Some("someone")
+        );
+        assert_eq!(
+            back.extra.get("project").and_then(|v| v.as_str()),
+            Some("alpha")
+        );
     }
 }
