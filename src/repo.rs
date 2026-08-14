@@ -728,30 +728,10 @@ impl Repo {
 
         let all_notes = self.list_notes(&ListNotesFilter::default())?;
 
+        // Link resolution lives in the workspace, which knows the store
+        // closure; checking it here too would report a working
+        // cross-store link as broken.
         for n in &all_notes {
-            for link in &n.frontmatter.links {
-                if self.resolve_id(link).is_err() {
-                    broken.push(BrokenLink {
-                        source_id: n.id.clone(),
-                        source_title: n.frontmatter.title.clone(),
-                        target: link.clone(),
-                        location: "frontmatter".to_string(),
-                    });
-                }
-            }
-
-            // Check the [[ref]] links in the body
-            for cap in extract_body_refs(&n.body) {
-                if self.resolve_id(&cap).is_err() {
-                    broken.push(BrokenLink {
-                        source_id: n.id.clone(),
-                        source_title: n.frontmatter.title.clone(),
-                        target: cap,
-                        location: "body".to_string(),
-                    });
-                }
-            }
-
             // Check the provenance vocabulary. The repo-wide commands
             // degrade a bad note to unknown; this is where it gets named.
             if let Err(e) =
@@ -1007,7 +987,7 @@ pub struct SpanCounts {
 }
 
 /// Extract all `[[ref]]` references from a markdown body.
-fn extract_body_refs(body: &str) -> Vec<String> {
+pub(crate) fn extract_body_refs(body: &str) -> Vec<String> {
     let mut refs = Vec::new();
     let mut remaining = body;
     while let Some(start) = remaining.find("[[") {

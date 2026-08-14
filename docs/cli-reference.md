@@ -168,12 +168,44 @@ Print the knowledge base statistics: the total note count, the span counts by or
 
 ---
 
+## `zettel store list`
+
+List the stores that this store reads. The first row is the store
+itself. Each other row shows a declared dependency, its source, and its
+note count. If a dependency is not reachable, the row gives the reason.
+
+Declarations live in `stores.yml` beside `zettel.yml`:
+
+```yaml
+format: 2
+shared: false          # true when other people clone this store
+stores:
+  - alias: project
+    path: ../project
+```
+
+A command reads all the declared stores. A command writes only to this
+store. A note in a dependency has the ID `alias:id`. A note in a
+dependency of a dependency has the ID `alias/alias:id`. The commands
+accept that longer form for read operations only.
+
+---
+
 ## `zettel check`
 
 Check every note for broken links, invalid provenance, and unparseable
 files. The command lists each finding with its note ID and exits non-zero
 when it finds any. One corrupt file never breaks the repo-wide commands:
 they skip it with a warning, and `check` names it.
+
+If the store declares other stores, `check` reports these conditions
+also:
+
+- A reference uses an alias that the store does not declare.
+- A declared store is not available.
+- A citation key reads as a store reference, but no note has that ID.
+- The scan refused to read a file.
+- In a `shared: true` store, a clone cannot reach a dependency.
 
 ---
 

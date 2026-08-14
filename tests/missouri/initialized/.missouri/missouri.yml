@@ -128,6 +128,21 @@ transitions:
       files:
         - path: ".zettel/"
           ignore: true
+  # A private user store that declares a repository store beside it.
+  # The repository never declares the user store back: it could not,
+  # because the target would not exist for anyone else who cloned it.
+  - name: "declare a dependency store"
+    command: |
+      mkdir -p dep && (cd dep && zettel init && zettel note create 'Pooling causes stale reads' -p human:dana -t db -b 'The pool reuses connections.') &&
+      zettel note create 'My annotation' -p human:cody -b 'Same class of bug as [[dep:pooling-causes-stale-reads]].' &&
+      printf 'format: 2\nstores:\n  - alias: dep\n    path: ./dep\n' > stores.yml
+    target: "../has-dep-store"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+        - path: "dep/"
+          ignore: true
 
 # The stderr checks grep instead of matching the whole stream: the nix
 # sandbox wrapper prepends a deprecation warning to stderr.

@@ -1,0 +1,4 @@
+format: 2
+stores:
+  - alias: dep
+    path: ./dep
