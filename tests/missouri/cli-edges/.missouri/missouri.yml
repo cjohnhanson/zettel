@@ -1,0 +1,28 @@
+# CLI edge behavior on a repo the assertions build up themselves. This
+# state is a leaf: the note-creating assertions never leak downstream.
+assertions:
+  - name: "create accepts a prestamped reviewed attr"
+    command: "zettel note create 'Prestamped' -p 'agent:summary reviewed=2020-01-01' -b 'agent text' >/dev/null && zettel note list --unreviewed"
+    stdout: ""
+  - name: "prestamped note matches the reviewed filter"
+    command: "zettel note list --provenance reviewed --format json | jq -e 'length == 1'"
+  - name: "arbitrary attrs round-trip"
+    command: "zettel note create 'Extra attr' -p 'agent:summary source=probe' -b 'x' >/dev/null && zettel note show extra-attr --field provenance"
+    stdout: "agent:summary source=probe\n"
+  - name: "reviewer name with spaces round-trips quoted"
+    command: "zettel note review extra-attr --approve all --reviewer 'Cody J. Hanson' && zettel note show extra-attr --field provenance | grep -q 'reviewer=\"Cody J. Hanson\"'"
+  - name: "reviewer without approve is ignored and lists spans"
+    command: "zettel note review prestamped --reviewer cody | grep -q 'Prestamped'"
+  - name: "empty provenance spec fails with a single prefix"
+    command: "! zettel note create 'Bad' -p '' >/dev/null 2>&1 && zettel note create 'Bad' -p '' 2>&1 >/dev/null | grep -c 'invalid provenance' | grep -qx '1'"
+  - name: "empty qualifier fails"
+    command: "! zettel note create 'Bad' -p 'human:' >/dev/null 2>&1 && zettel note create 'Bad' -p 'human:' 2>&1 >/dev/null | grep -q 'empty qualifier'"
+  - name: "failed create leaves no file"
+    command: "test $(zettel note list --format json | jq 'length') -eq 2"
+  - name: "trailing comma in the filter list fails"
+    command: "zettel note list --provenance 'reviewed,'"
+    should_fail: true
+  - name: "space-padded filter tokens are trimmed"
+    command: "zettel note list --provenance ' reviewed , unknown ' | grep -q 'Prestamped'"
+  - name: "failed edit keeps the old provenance"
+    command: "! zettel note edit prestamped -p '' >/dev/null 2>&1 && zettel note show prestamped --field provenance | grep -q 'agent:summary reviewed=2020-01-01'"

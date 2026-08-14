@@ -6,7 +6,131 @@ transitions:
       files:
         - path: ".zettel/"
           ignore: true
+  - name: "write pre-provenance notes"
+    command: "printf -- '---\\ntitle: Old permanent note\\nstatus: permanent\\n---\\n\\nOld wisdom.\\n' > .zettel/zz99-old-permanent-note.md && printf -- '---\\ntitle: Old draft note\\nstatus: draft\\n---\\n\\nRough capture.\\n' > .zettel/zz98-old-draft-note.md && printf -- '---\\ntitle: Old both keys\\nstatus: permanent\\nprovenance: agent:summary\\n---\\n\\nAlready labeled.\\n' > .zettel/zz97-old-both-keys.md"
+    target: "../has-legacy-note"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "create marker edge notes"
+    command: |
+      zettel note create 'Double open' -b '<!-- prov agent:summary -->
+      one
+      <!-- prov human:cody -->
+      two
+      <!-- /prov -->' && zettel note create 'Stray close' -b 'text
+      <!-- /prov -->
+      more' && zettel note create 'Empty agent span' -b '<!-- prov agent:index -->
+      <!-- /prov -->' && zettel note create 'Quoted citation attrs' -p agent:summary -b 'summary text
 
+      <!-- prov citation:ddia src=https://example.com/a?b=1 title="Data Intensive Apps" p=212 -->
+      > quoted line
+      <!-- /prov -->' && zettel note create 'Indented marker' -b 'lead
+        <!-- prov human:cody -->
+        indented human text
+        <!-- /prov -->' && zettel note create 'Long excerpt' -b '<!-- prov agent:inference -->
+      This first line is deliberately much longer than sixty characters so the review excerpt truncates.
+      <!-- /prov -->'
+    target: "../has-marker-edge-notes"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "create unclosed span note"
+    command: |
+      zettel note create 'Unclosed trail' -b 'intro
+
+      <!-- prov agent:inference -->
+      an open guess with no close'
+    target: "../has-unclosed-span"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "write corrupt and colliding notes"
+    command: "zettel note create 'Good note' -p human:cody -b 'fine' && printf -- '---\\ntitle: Corrupt typed provenance\\nprovenance: [a, b]\\n---\\n\\nx\\n' > .zettel/zz90-corrupt-typed.md && printf -- '' > .zettel/zz89-empty-file.md && printf -- '---\\ntitle: Bad spec string\\nprovenance: robot\\n---\\n\\ny\\n' > .zettel/zz88-bad-spec.md && printf -- '---\\ntitle: Twin A\\n---\\n\\na\\n' > .zettel/zz96-twin-a.md && printf -- '---\\ntitle: Twin B\\n---\\n\\nb\\n' > .zettel/zz96-twin-b.md"
+    target: "../has-bad-notes"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "create empty agent note"
+    command: "zettel note create 'Empty agent stub' -p agent:summary"
+    target: "../has-empty-agent-note"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "create marked note without default"
+    command: |
+      zettel note create 'Marked no default' -b 'unmarked opening text
+
+      <!-- prov agent:inference -->
+      a guess
+      <!-- /prov -->'
+    target: "../has-marked-no-default"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "create two agent span note"
+    command: |
+      zettel note create 'Two agent spans' -p human:cody -b 'human intro
+
+      <!-- prov agent:summary -->
+      first agent span
+      <!-- /prov -->
+
+      <!-- prov agent:inference -->
+      second agent span
+      <!-- /prov -->' && printf -- '---\ntitle: Extra keys note\nprovenance: agent:summary\nauthor: someone\nproject: alpha\n---\n\nagent text\n' > .zettel/zz87-extra-keys-note.md
+    target: "../has-two-agent-spans"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "create citation graph notes"
+    command: |
+      zettel note create 'Cited source' -p human:cody -b 'the source text' && zettel note create 'Citing note' -b '<!-- prov citation:cited-source -->
+      > quoted from the source
+      <!-- /prov -->' && zettel note create 'External citation' -b '<!-- prov citation:kleppmann src=https://example.com -->
+      > external quote
+      <!-- /prov -->' && zettel note create 'Span ref note' -b '<!-- prov agent:summary -->
+      derived from [[cited-source]] directly
+      <!-- /prov -->'
+    target: "../has-citation-note"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "create quoted dangling ref"
+    command: |
+      zettel note create 'Quote with dangling ref' -b '<!-- prov citation:somewhere -->
+      > see [[nonexistent-note]] for details
+      <!-- /prov -->'
+    target: "../has-quoted-dangling-ref"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "create unicode provenance note"
+    command: "zettel note create 'Unicode author' -p 'human:cody-øyvind' -b 'text'"
+    target: "../has-unicode-provenance"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "enter cli edge checks"
+    command: "true"
+    target: "../cli-edges"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+
+# The stderr checks grep instead of matching the whole stream: the nix
+# sandbox wrapper prepends a deprecation warning to stderr.
 assertions:
   - name: "note list is empty"
     command: "zettel note list"
@@ -15,17 +139,13 @@ assertions:
     command: "zettel orphans"
     stdout: ""
   - name: "init when already initialized fails"
-    command: "zettel init"
-    should_fail: true
-    stderr: "error: already initialized (zettel.yml exists)\n"
+    command: "! zettel init >/dev/null 2>&1 && zettel init 2>&1 >/dev/null | grep -q 'error: already initialized (zettel.yml exists)'"
   - name: "create note without title fails"
     command: "zettel note create"
     should_fail: true
   - name: "show nonexistent note fails"
-    command: "zettel note show foo"
-    should_fail: true
-    stderr: "error: note 'foo' not found\n"
+    command: "! zettel note show foo >/dev/null 2>&1 && zettel note show foo 2>&1 >/dev/null | grep -q \"error: note 'foo' not found\""
   - name: "delete nonexistent note fails"
-    command: "zettel note delete foo"
-    should_fail: true
-    stderr: "error: note 'foo' not found\n"
+    command: "! zettel note delete foo >/dev/null 2>&1 && zettel note delete foo 2>&1 >/dev/null | grep -q \"error: note 'foo' not found\""
+  - name: "docs unknown slug fails and lists the docs"
+    command: "! zettel docs nope >/dev/null 2>&1 && zettel docs nope 2>&1 >/dev/null | grep -q 'available docs'"

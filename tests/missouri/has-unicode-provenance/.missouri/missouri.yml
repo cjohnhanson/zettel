@@ -1,0 +1,11 @@
+assertions:
+  - name: "the unicode qualifier round-trips"
+    command: "zettel note show unicode-author --field provenance"
+    stdout: "human:cody-øyvind\n"
+  - name: "the exact qualifier matches"
+    command: "zettel note list --provenance 'human:cody-øyvind' | grep -q 'Unicode author'"
+  - name: "a qualifier prefix does not match"
+    command: "zettel note list --provenance human:cody"
+    stdout: ""
+  - name: "the bare origin matches"
+    command: "zettel note list --provenance human | grep -q 'Unicode author'"

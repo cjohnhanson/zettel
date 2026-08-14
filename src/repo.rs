@@ -11,18 +11,24 @@ pub struct CreateNoteOptions {
     pub tags: Option<String>,
     pub links: Option<String>,
     pub body: Option<String>,
-    pub status: Option<note::Status>,
+    /// The default provenance spec for the note.
+    pub provenance: Option<String>,
 }
 
+#[derive(Default)]
 pub struct ListNotesFilter<'a> {
     pub tag: Option<&'a str>,
-    pub status: Option<note::Status>,
+    /// Comma-separated provenance filter tokens. A note matches when any
+    /// of its spans matches any token.
+    pub provenance: Option<&'a str>,
+    /// Keep only the notes with at least one unreviewed agent span.
+    pub unreviewed: bool,
 }
 
 #[derive(Default)]
 pub struct EditNoteOptions<'a> {
     pub title: Option<&'a str>,
-    pub status: Option<&'a str>,
+    pub provenance: Option<&'a str>,
     pub tags: Option<&'a str>,
     pub add_tag: Option<&'a str>,
     pub remove_tag: Option<&'a str>,
@@ -215,8 +221,9 @@ impl Repo {
         let note_path = dir.join(format!("{id}.md"));
 
         let mut fm = note::new_frontmatter(title);
-        if let Some(status) = opts.status {
-            fm.status = status;
+        if let Some(spec) = opts.provenance {
+            crate::provenance::parse_spec(&spec)?;
+            fm.provenance = Some(spec);
         }
         if let Some(t) = opts.tags {
             fm.tags = t.split(',').map(|s| s.trim().to_string()).collect();
@@ -247,12 +254,16 @@ impl Repo {
             if path.extension() == Some("md") {
                 let id = path.file_stem().unwrap_or("").to_string();
                 let content = std::fs::read_to_string(&path)?;
-                let (fm, body) = note::parse_note(&content)?;
-                notes.push(Note {
-                    id,
-                    frontmatter: fm,
-                    body,
-                });
+                // One unparseable file must not take down a repo-wide
+                // command. Skip it with a warning; `zettel check` names it.
+                match note::parse_note(&content) {
+                    Ok((fm, body)) => notes.push(Note {
+                        id,
+                        frontmatter: fm,
+                        body,
+                    }),
+                    Err(e) => eprintln!("warning: skipping {id}: {e}"),
+                }
             }
         }
 
@@ -260,8 +271,24 @@ impl Repo {
             notes.retain(|n| n.frontmatter.tags.iter().any(|t| t == tag));
         }
 
-        if let Some(status) = filter.status {
-            notes.retain(|n| n.frontmatter.status == status);
+        if let Some(tokens) = filter.provenance {
+            let tokens: Vec<&str> = tokens.split(',').map(str::trim).collect();
+            for token in &tokens {
+                crate::provenance::validate_filter_token(token)?;
+            }
+            notes.retain(|n| {
+                crate::provenance::note_matches_tokens(
+                    n.frontmatter.provenance.as_deref(),
+                    &n.body,
+                    &tokens,
+                )
+            });
+        }
+
+        if filter.unreviewed {
+            notes.retain(|n| {
+                crate::provenance::note_has_unreviewed(n.frontmatter.provenance.as_deref(), &n.body)
+            });
         }
 
         notes.sort_by(|a, b| a.id.cmp(&b.id));
@@ -297,9 +324,26 @@ impl Repo {
             fm.title = new_title.to_string();
         }
 
-        if let Some(new_status) = opts.status {
-            fm.status = new_status.parse::<note::Status>()?;
+        if let Some(spec) = opts.provenance {
+            let mut new_marker = crate::provenance::parse_spec(spec)?;
+            // The same origin and qualifier keep the existing attrs (a
+            // review stamp survives a no-op re-set); a different origin
+            // or qualifier drops them, because the review no longer
+            // applies to what the spec now claims.
+            if new_marker.attrs.is_empty()
+                && let Some(old) = fm
+                    .provenance
+                    .as_deref()
+                    .and_then(|s| crate::provenance::parse_spec(s).ok())
+                && old.origin == new_marker.origin
+                && old.qualifier == new_marker.qualifier
+            {
+                new_marker.attrs = old.attrs;
+            }
+            fm.provenance = Some(new_marker.to_string());
         }
+
+        let body_changed = opts.body.is_some() || opts.append.is_some();
 
         if let Some(new_body) = opts.body {
             body = new_body.to_string();
@@ -309,9 +353,27 @@ impl Repo {
             if body.is_empty() {
                 body = append_text.to_string();
             } else {
+                // A body ending inside an open span would absorb the
+                // appended text and mislabel it. Close the span first.
+                if mdstore::provenance::ends_open(&body).unwrap_or(false) {
+                    body.push_str("\n<!-- /prov -->");
+                }
                 body.push_str("\n\n");
                 body.push_str(append_text);
             }
+        }
+
+        // Changed content invalidates the default's review stamp: the
+        // stamp vouched for text that is no longer there.
+        if body_changed
+            && let Some(spec) = fm.provenance.as_deref()
+            && let Ok(mut d) = crate::provenance::parse_spec(spec)
+            && d.attr(crate::provenance::ATTR_REVIEWED).is_some()
+        {
+            d.attrs.retain(|(k, _)| {
+                k != crate::provenance::ATTR_REVIEWED && k != crate::provenance::ATTR_REVIEWER
+            });
+            fm.provenance = Some(d.to_string());
         }
 
         if let Some(t) = opts.tags {
@@ -361,13 +423,22 @@ impl Repo {
 
     // -- Links & backlinks --
 
+    /// The note IDs a note cites through citation-origin spans, resolved.
+    /// A source that does not resolve is an external key, not an error.
+    fn resolved_citations(&self, n: &Note) -> Vec<String> {
+        crate::provenance::citation_refs(n.frontmatter.provenance.as_deref(), &n.body)
+            .iter()
+            .filter_map(|r| self.resolve_id(r).ok())
+            .collect()
+    }
+
     /// Find all notes that link to the given note. The link is a full ID or a
     /// prefix.
     pub fn backlinks(&self, id: &str) -> Result<Vec<Backlink>> {
         let resolved = self.resolve_id(id)?;
         let prefix = extract_prefix(&resolved).map(|(p, _)| p.to_string());
 
-        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
+        let all_notes = self.list_notes(&ListNotesFilter::default())?;
         let mut results = Vec::new();
 
         for n in &all_notes {
@@ -386,7 +457,10 @@ impl Repo {
             // Also check the body for [[id]] references
             let body_links = body_contains_link(&n.body, &resolved, prefix.as_deref());
 
-            if links_to_target || body_links {
+            // A citation of a note is a graph edge too.
+            let cites_target = self.resolved_citations(n).iter().any(|c| c == &resolved);
+
+            if links_to_target || body_links || cites_target {
                 results.push(Backlink {
                     id: n.id.clone(),
                     title: n.frontmatter.title.clone(),
@@ -399,12 +473,13 @@ impl Repo {
 
     /// Find the notes with no incoming links and no outgoing links.
     pub fn orphans(&self) -> Result<Vec<Note>> {
-        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
+        let all_notes = self.list_notes(&ListNotesFilter::default())?;
         let all_ids: Vec<&str> = all_notes.iter().map(|n| n.id.as_str()).collect();
 
         let mut orphans = Vec::new();
         for n in &all_notes {
-            let has_outgoing = !n.frontmatter.links.is_empty();
+            let has_outgoing =
+                !n.frontmatter.links.is_empty() || !self.resolved_citations(n).is_empty();
             let has_incoming = all_notes.iter().any(|other| {
                 other.id != n.id
                     && (other.frontmatter.links.iter().any(|l| {
@@ -417,7 +492,7 @@ impl Repo {
                         &other.body,
                         &n.id,
                         extract_prefix(&n.id).map(|(p, _)| p),
-                    ))
+                    ) || self.resolved_citations(other).contains(&n.id))
             });
             let has_body_outgoing = all_ids
                 .iter()
@@ -428,7 +503,7 @@ impl Repo {
                     id: n.id.clone(),
                     frontmatter: NoteFrontmatter {
                         title: n.frontmatter.title.clone(),
-                        status: n.frontmatter.status,
+                        provenance: n.frontmatter.provenance.clone(),
                         tags: n.frontmatter.tags.clone(),
                         links: n.frontmatter.links.clone(),
                         created: n.frontmatter.created.clone(),
@@ -449,7 +524,7 @@ impl Repo {
         let re = regex::Regex::new(pattern)
             .map_err(|e| Error::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e)))?;
 
-        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
+        let all_notes = self.list_notes(&ListNotesFilter::default())?;
         let mut results = Vec::new();
 
         for n in all_notes {
@@ -478,7 +553,7 @@ impl Repo {
 
     pub fn context(&self, id: &str, depth: usize) -> Result<Vec<Note>> {
         let resolved = self.resolve_id(id)?;
-        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
+        let all_notes = self.list_notes(&ListNotesFilter::default())?;
 
         let mut collected: Vec<String> = vec![resolved.clone()];
         let mut frontier: Vec<String> = vec![resolved];
@@ -494,6 +569,13 @@ impl Repo {
                         {
                             collected.push(resolved_link.clone());
                             next_frontier.push(resolved_link);
+                        }
+                    }
+                    // A citation of a note is a forward edge too.
+                    for cited in self.resolved_citations(n) {
+                        if !collected.contains(&cited) {
+                            collected.push(cited.clone());
+                            next_frontier.push(cited);
                         }
                     }
                     // Also check the body for [[ref]] links
@@ -519,7 +601,10 @@ impl Repo {
                         &other.body,
                         current_id,
                         extract_prefix(current_id).map(|(p, _)| p),
-                    );
+                    ) || self
+                        .resolved_citations(other)
+                        .iter()
+                        .any(|c| c == current_id);
                     if links_here {
                         collected.push(other.id.clone());
                         next_frontier.push(other.id.clone());
@@ -540,7 +625,7 @@ impl Repo {
                     id: n.id.clone(),
                     frontmatter: NoteFrontmatter {
                         title: n.frontmatter.title.clone(),
-                        status: n.frontmatter.status,
+                        provenance: n.frontmatter.provenance.clone(),
                         tags: n.frontmatter.tags.clone(),
                         links: n.frontmatter.links.clone(),
                         created: n.frontmatter.created.clone(),
@@ -558,11 +643,29 @@ impl Repo {
     // -- Stats --
 
     pub fn stats(&self) -> Result<Stats> {
-        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
+        let all_notes = self.list_notes(&ListNotesFilter::default())?;
 
         let total = all_notes.len();
-        let draft_count = all_notes.iter().filter(|n| n.frontmatter.status == note::Status::Draft).count();
-        let permanent_count = all_notes.iter().filter(|n| n.frontmatter.status == note::Status::Permanent).count();
+
+        // Span counts by origin, across all notes
+        let mut span_counts = SpanCounts::default();
+        for n in &all_notes {
+            let spans = crate::provenance::resolve_spans_lenient(
+                n.frontmatter.provenance.as_deref(),
+                &n.body,
+            );
+            for s in &spans {
+                match s.marker.as_ref().map(|m| m.origin.as_str()) {
+                    Some(crate::provenance::ORIGIN_HUMAN) => span_counts.human += 1,
+                    Some(crate::provenance::ORIGIN_AGENT) => span_counts.agent += 1,
+                    Some(crate::provenance::ORIGIN_CITATION) => span_counts.citation += 1,
+                    _ => span_counts.unknown += 1,
+                }
+                if crate::provenance::is_unreviewed_agent(s.marker.as_ref()) {
+                    span_counts.unreviewed_agent += 1;
+                }
+            }
+        }
 
         // Tag frequency
         let mut tag_counts: Vec<(String, usize)> = Vec::new();
@@ -589,8 +692,7 @@ impl Repo {
 
         Ok(Stats {
             total,
-            draft_count,
-            permanent_count,
+            span_counts,
             tag_counts,
             most_connected: backlink_counts.into_iter().take(5).collect(),
             orphan_count,
@@ -600,8 +702,31 @@ impl Repo {
     // -- Check (broken links) --
 
     pub fn check(&self) -> Result<Vec<BrokenLink>> {
-        let all_notes = self.list_notes(&ListNotesFilter { tag: None, status: None })?;
         let mut broken = Vec::new();
+
+        // Name the files that list_notes skips: the diagnostic command
+        // must survive the corruption it diagnoses.
+        let dir = self.zettel_dir();
+        if dir.exists() {
+            for entry in std::fs::read_dir(&dir)? {
+                let entry = entry?;
+                let path = Utf8PathBuf::try_from(entry.path())
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+                if path.extension() == Some("md") {
+                    let content = std::fs::read_to_string(&path)?;
+                    if let Err(e) = note::parse_note(&content) {
+                        broken.push(BrokenLink {
+                            source_id: path.file_stem().unwrap_or("").to_string(),
+                            source_title: "unparseable".to_string(),
+                            target: e.to_string(),
+                            location: "frontmatter".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        let all_notes = self.list_notes(&ListNotesFilter::default())?;
 
         for n in &all_notes {
             for link in &n.frontmatter.links {
@@ -626,9 +751,224 @@ impl Repo {
                     });
                 }
             }
+
+            // Check the provenance vocabulary. The repo-wide commands
+            // degrade a bad note to unknown; this is where it gets named.
+            if let Err(e) =
+                crate::provenance::resolve_spans(n.frontmatter.provenance.as_deref(), &n.body)
+            {
+                broken.push(BrokenLink {
+                    source_id: n.id.clone(),
+                    source_title: n.frontmatter.title.clone(),
+                    target: e.to_string(),
+                    location: "provenance".to_string(),
+                });
+            }
         }
 
         Ok(broken)
+    }
+
+    // -- Provenance review --
+
+    /// The spans of a note, resolved against its default provenance.
+    /// Strict: an invalid marker is an error here, unlike the repo-wide
+    /// commands that degrade a bad note to unknown.
+    pub fn note_spans(&self, id: &str) -> Result<(Note, Vec<crate::provenance::ResolvedSpan>)> {
+        let n = self.find_note(id)?;
+        let spans =
+            crate::provenance::resolve_spans(n.frontmatter.provenance.as_deref(), &n.body)?;
+        Ok((n, spans))
+    }
+
+    /// Stamp `reviewed=<today>` on agent spans. `spans` holds 1-based
+    /// indices as `note review` shows them; `None` stamps every unreviewed
+    /// agent span. A stamp on an unmarked span goes to the note's default
+    /// provenance spec, so it covers all unmarked text; the default counts
+    /// once no matter how many unmarked spans it covers. A note with no
+    /// body spans approves through its default alone. Returns the number
+    /// of spans stamped.
+    pub fn approve_spans(
+        &self,
+        id: &str,
+        spans: Option<&[usize]>,
+        reviewer: Option<&str>,
+    ) -> Result<usize> {
+        let n = self.find_note(id)?;
+        let note_path = self.zettel_dir().join(format!("{}.md", n.id));
+        let content = std::fs::read_to_string(&note_path)?;
+        let (mut fm, body) = note::parse_note(&content)?;
+
+        let mut raw = mdstore::provenance::parse_spans(&body)
+            .map_err(crate::provenance::from_mdstore)?;
+        // The review command validates like the listing does: an invalid
+        // marker never gets approved.
+        for span in &raw {
+            if let Some(m) = &span.marker {
+                crate::provenance::validate_marker(m)?;
+            }
+        }
+        let mut default = fm
+            .provenance
+            .as_deref()
+            .map(crate::provenance::parse_spec)
+            .transpose()?;
+
+        let today = format!("{}", chrono::Utc::now().format("%Y-%m-%d"));
+        let stamp_default = |d: &mut mdstore::Marker| {
+            d.set_attr(crate::provenance::ATTR_REVIEWED, &today);
+            if let Some(r) = reviewer {
+                d.set_attr(crate::provenance::ATTR_REVIEWER, r);
+            }
+        };
+
+        let mut targets: Vec<usize> = match spans {
+            Some(list) => {
+                for &i in list {
+                    if i == 0 || i > raw.len() {
+                        return Err(Error::SpanNotFound(i));
+                    }
+                    let span = &raw[i - 1];
+                    // A separator never shows in the review listing, so a
+                    // number the user never saw is "not found", not a
+                    // silent default approval.
+                    if crate::provenance::is_separator(span.marker.as_ref(), &span.text) {
+                        return Err(Error::SpanNotFound(i));
+                    }
+                    let effective = span.marker.as_ref().or(default.as_ref());
+                    let agent = effective
+                        .is_some_and(|m| m.origin == crate::provenance::ORIGIN_AGENT);
+                    if !agent {
+                        return Err(Error::SpanNotAgent(i));
+                    }
+                }
+                list.iter().map(|&i| i - 1).collect()
+            }
+            None => (0..raw.len())
+                .filter(|&i| {
+                    if crate::provenance::is_separator(raw[i].marker.as_ref(), &raw[i].text) {
+                        return false;
+                    }
+                    let effective = raw[i].marker.as_ref().or(default.as_ref());
+                    crate::provenance::is_unreviewed_agent(effective)
+                })
+                .collect(),
+        };
+        // A duplicated index stamps and counts once.
+        let mut seen: Vec<usize> = Vec::new();
+        targets.retain(|i| {
+            if seen.contains(i) {
+                false
+            } else {
+                seen.push(*i);
+                true
+            }
+        });
+
+        // An empty body has no spans; `--approve all` stamps the default.
+        if raw.is_empty()
+            && spans.is_none()
+            && crate::provenance::is_unreviewed_agent(default.as_ref())
+        {
+            let d = default.as_mut().expect("unreviewed agent default exists");
+            stamp_default(d);
+            fm.provenance = Some(d.to_string());
+            note::update_timestamp(&mut fm);
+            std::fs::write(&note_path, note::serialize_note(&fm, &body))?;
+            return Ok(1);
+        }
+
+        let mut stamped = 0usize;
+        let mut default_stamped = false;
+        for i in targets {
+            match &mut raw[i].marker {
+                Some(m) => {
+                    m.set_attr(crate::provenance::ATTR_REVIEWED, &today);
+                    if let Some(r) = reviewer {
+                        m.set_attr(crate::provenance::ATTR_REVIEWER, r);
+                    }
+                    stamped += 1;
+                }
+                None => {
+                    if let Some(d) = &mut default
+                        && !default_stamped
+                    {
+                        stamp_default(d);
+                        default_stamped = true;
+                        stamped += 1;
+                    }
+                }
+            }
+        }
+
+        if stamped > 0 {
+            if let Some(d) = &default {
+                fm.provenance = Some(d.to_string());
+            }
+            let new_body = mdstore::provenance::render_spans(&raw);
+            note::update_timestamp(&mut fm);
+            std::fs::write(&note_path, note::serialize_note(&fm, &new_body))?;
+        }
+        Ok(stamped)
+    }
+
+    // -- Migration --
+
+    /// Convert pre-provenance notes. `status: permanent` becomes
+    /// `provenance: human` (a permanent note was rewritten by its author);
+    /// the status key is removed either way. A second run changes nothing.
+    pub fn migrate(&self) -> Result<Vec<(String, MigrateAction)>> {
+        let dir = self.zettel_dir();
+        let mut changes = Vec::new();
+        if !dir.exists() {
+            return Ok(changes);
+        }
+        let status_key = serde_yml::Value::String("status".into());
+        let mut paths: Vec<Utf8PathBuf> = Vec::new();
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = Utf8PathBuf::try_from(entry.path())
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            if path.extension() == Some("md") {
+                paths.push(path);
+            }
+        }
+        paths.sort();
+        for path in paths {
+            let id = path.file_stem().unwrap_or("").to_string();
+            let content = std::fs::read_to_string(&path)?;
+            let (mut fm, body) = note::parse_note(&content)?;
+            let Some(status) = fm.extra.remove(&status_key) else {
+                continue;
+            };
+            let action = if status.as_str() == Some("permanent") && fm.provenance.is_none() {
+                fm.provenance = Some("human".to_string());
+                MigrateAction::SetHuman
+            } else {
+                MigrateAction::RemovedStatus
+            };
+            std::fs::write(&path, note::serialize_note(&fm, &body))?;
+            changes.push((id, action));
+        }
+        Ok(changes)
+    }
+}
+
+/// What `migrate` did to one note.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum MigrateAction {
+    /// `status: permanent` became `provenance: human`.
+    SetHuman,
+    /// The status key was removed; the provenance stays as it was.
+    RemovedStatus,
+}
+
+impl std::fmt::Display for MigrateAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SetHuman => f.write_str("provenance: human"),
+            Self::RemovedStatus => f.write_str("status key removed"),
+        }
     }
 }
 
@@ -649,11 +989,21 @@ pub struct SearchResult {
 #[derive(Debug, Serialize)]
 pub struct Stats {
     pub total: usize,
-    pub draft_count: usize,
-    pub permanent_count: usize,
+    pub span_counts: SpanCounts,
     pub tag_counts: Vec<(String, usize)>,
     pub most_connected: Vec<(String, String, usize)>,
     pub orphan_count: usize,
+}
+
+/// Body span counts by origin, across the whole knowledge base.
+#[derive(Debug, Default, Serialize)]
+pub struct SpanCounts {
+    pub human: usize,
+    pub agent: usize,
+    pub citation: usize,
+    pub unknown: usize,
+    /// Agent spans with no `reviewed=` attribute.
+    pub unreviewed_agent: usize,
 }
 
 /// Extract all `[[ref]]` references from a markdown body.

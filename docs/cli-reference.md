@@ -37,7 +37,7 @@ Create a note. Zettel prints the new note ID to stdout.
 | `--tags <csv>` | `-t` | | The tags; separate them with commas |
 | `--links <csv>` | `-l` | | The note IDs to link to; separate them with commas |
 | `--body <text>` | `-b` | | The note body text |
-| `--status <status>` | `-s` | `draft` | The initial status: `draft` or `permanent` |
+| `--provenance <spec>` | `-p` | | The default provenance: `origin[:qualifier]`, for example `human:cody`, `agent:summary`, `citation:ab12`. Omitted means unknown |
 
 ### `zettel note list`
 
@@ -46,11 +46,12 @@ List the notes. The default lists all notes.
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--tag <tag>` | `-t` | | Filter by tag |
-| `--status <status>` | `-s` | | Filter by status: `draft` or `permanent` |
-| `--where <selector>` | | | Filter by selector (`namespace:value`). Repeat the option to add selectors. Zettel combines them with AND |
+| `--provenance <tokens>` | `-p` | | Filter by provenance tokens, separated with commas: `human`, `agent`, `agent:inference`, `citation`, `reviewed`, `unknown`. A note matches when any span matches any token |
+| `--unreviewed` | | | Keep only the notes with unreviewed agent content |
+| `--where <selector>` | | | Filter by selector (`namespace:value`). Repeat the option to add selectors. Zettel combines them with AND. The `provenance` namespace takes the same tokens |
 | `--format <fmt>` | | `text` | The output format: `text` or `json` |
 
-Text output columns: `ID`, `STATUS`, `[TAGS]`, `TITLE`.
+Text output columns: `ID`, `PROVENANCE`, `[TAGS]`, `TITLE`.
 
 ### `zettel note show <id>`
 
@@ -61,7 +62,10 @@ Show the full details of a note.
 | `--format <fmt>` | | `text` | The output format: `text` or `json` |
 | `--field <name>` | | | Print one field value |
 
-Valid `--field` values: `title`, `status`, `tags`, `links`, `body`, `id`.
+Valid `--field` values: `title`, `provenance`, `tags`, `links`, `body`, `id`.
+
+The JSON output carries a `spans` array. Each span holds its text, its
+resolved provenance, and whether the provenance comes from the note default.
 
 ### `zettel note edit <id>`
 
@@ -70,7 +74,7 @@ Edit a note. Zettel changes only the fields you give.
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--title <text>` | | Replace the title |
-| `--status <status>` | `-s` | Set the status: `draft` or `permanent` |
+| `--provenance <spec>` | `-p` | Set the default provenance: `origin[:qualifier]` |
 | `--tags <csv>` | `-t` | Replace all tags; separate them with commas |
 | `--add-tag <tag>` | | Add one tag and keep the existing tags |
 | `--remove-tag <tag>` | | Remove one tag and keep the other tags |
@@ -85,6 +89,28 @@ Zettel sets the `updated` timestamp automatically.
 ### `zettel note delete <id>`
 
 Delete the note file. You cannot undo this.
+
+### `zettel note review <id>`
+
+Without options: list the note's provenance spans, numbered. With
+`--approve`: stamp agent spans as human-approved. Only a human runs
+`--approve`.
+
+| Option | Description |
+|--------|-------------|
+| `--approve <spans>` | `all` for every unreviewed agent span, or 1-based span numbers separated with commas |
+| `--reviewer <name>` | The reviewer name to record with the approval |
+
+The approval writes `reviewed=<date>` (and `reviewer=<name>`) into the span
+marker, or into the note's default provenance spec for unmarked text.
+Approving a non-agent span fails. A note with no body spans approves
+through its default.
+
+A later `--body` or `--append` edit removes the default's review stamp:
+the stamp vouched for text that changed. A stamp on a body marker stays,
+because its span text did not change. Setting the same provenance again
+with `note edit --provenance` keeps the stamp; a different origin or
+qualifier drops it.
 
 ---
 
@@ -132,13 +158,30 @@ Show the full content of the matching notes. Zettel prints a frontmatter summary
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--tag <tag>` | `-t` | Filter by tag |
-| `--status <status>` | `-s` | Filter by status: `draft` or `permanent` |
+| `--provenance <tokens>` | `-p` | Filter by provenance tokens, separated with commas. Only the matching spans print, each under a `[provenance]` label. Notes with no match are omitted |
 
 ---
 
 ## `zettel stats`
 
-Print the knowledge base statistics: the total note count, the draft and permanent counts, the orphan count, the tag distribution, and the most connected notes.
+Print the knowledge base statistics: the total note count, the span counts by origin (with the unreviewed agent count), the orphan count, the tag distribution, and the most connected notes.
+
+---
+
+## `zettel check`
+
+Check every note for broken links, invalid provenance, and unparseable
+files. The command lists each finding with its note ID and exits non-zero
+when it finds any. One corrupt file never breaks the repo-wide commands:
+they skip it with a warning, and `check` names it.
+
+---
+
+## `zettel migrate`
+
+Convert pre-provenance notes. `status: permanent` becomes
+`provenance: human`; `status: draft` stays unknown. The status key is
+removed either way. A second run changes nothing.
 
 ---
 
