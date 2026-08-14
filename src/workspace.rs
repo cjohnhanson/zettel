@@ -9,7 +9,8 @@
 
 use camino::{Utf8Path, Utf8PathBuf};
 use mdstore::snapshot::{DocId, DocumentSource, Entry, Snapshot};
-use mdstore::store::{LocalPaths, StoreGraph, StoreRef};
+use mdstore::registry::{Registry, RegistryLocator};
+use mdstore::store::{FetchingLocator, LocalPaths, StoreContent, StoreGraph, StoreRef};
 
 use crate::config::ZettelConfig;
 use crate::error::{Error, Result};
@@ -23,33 +24,35 @@ impl DocumentSource for NoteSource {
 
     fn load(
         &self,
-        root: &std::path::Path,
+        content: &StoreContent,
         skipped: &mut Vec<String>,
     ) -> mdstore::Result<Vec<Entry<Note>>> {
         // A dependency's own config chooses its note directory, so the
         // value is guarded: it may not be absolute or climb out of the
         // store.
-        let config_path = root.join("zettel.yml");
-        let dir_name = if config_path.exists() {
-            let text = std::fs::read_to_string(&config_path)?;
+        let dir_name = if content.exists("zettel.yml") {
+            let text = content.read("zettel.yml")?;
             serde_yml::from_str::<ZettelConfig>(&text)
                 .map(|c| c.zettel_dir)
                 .unwrap_or_else(|_| ".zettel".to_string())
         } else {
             ".zettel".to_string()
         };
-        let dir = mdstore::store::document_dir(root, &dir_name)?;
+        // Reject a directory value that is absolute or climbs out.
+        if let Some(dir) = content.dir() {
+            mdstore::store::document_dir(dir, &dir_name)?;
+        }
 
-        let scan = mdstore::store::scan_documents(&dir)?;
+        let scan = content.scan(&dir_name)?;
         for (path, why) in scan.skipped {
             skipped.push(format!("{} ({why})", path.display()));
         }
 
         let mut notes = Vec::new();
         for entry in scan.entries {
-            let content = std::fs::read_to_string(&entry.path)?;
+            let text = content.read(&entry.path.to_string_lossy())?;
             // One unparseable note never takes down a store.
-            match note::parse_note(&content) {
+            match note::parse_note(&text) {
                 Ok((frontmatter, body)) => notes.push(Entry {
                     id: entry.stem.clone(),
                     doc: Note {
@@ -149,6 +152,10 @@ pub struct StoreRow {
     pub source: String,
     pub notes: usize,
     pub unavailable: Option<String>,
+    /// True when a cache holds this store.
+    pub remote: bool,
+    /// The time since the last fetch, for a remote store.
+    pub age: Option<String>,
 }
 
 /// A note as seen from a vantage: the note plus where it lives.
@@ -166,18 +173,44 @@ pub struct View<'a> {
 pub struct Workspace {
     snapshot: Snapshot<NoteSource>,
     source: NoteSource,
+    /// Dependencies that the machine-local registry redirected to a
+    /// checkout, with that checkout's path.
+    redirected: Vec<(String, String)>,
 }
 
 impl Workspace {
-    /// Load the vantage store and its closure.
+    /// Load the vantage store and its closure from what is on this
+    /// machine. No command that reads reaches the network.
     pub fn open(root: &Utf8Path) -> Result<Self> {
-        let graph = StoreGraph::open(root.as_std_path(), &LocalPaths)
-            .map_err(crate::provenance::from_mdstore)?;
+        Self::open_with(root, false)
+    }
+
+    /// Load the closure, and clone a remote store that is absent.
+    /// Only `store sync` uses this.
+    pub fn open_fetching(root: &Utf8Path) -> Result<Self> {
+        Self::open_with(root, true)
+    }
+
+    fn open_with(root: &Utf8Path, fetching: bool) -> Result<Self> {
+        let registry = Registry::load().unwrap_or_default();
+        let graph = if fetching {
+            let locator = RegistryLocator::new(registry, FetchingLocator);
+            let g = StoreGraph::open(root.as_std_path(), &locator)
+                .map_err(crate::provenance::from_mdstore)?;
+            (g, locator.redirected())
+        } else {
+            let locator = RegistryLocator::new(registry, LocalPaths);
+            let g = StoreGraph::open(root.as_std_path(), &locator)
+                .map_err(crate::provenance::from_mdstore)?;
+            (g, locator.redirected())
+        };
+        let (graph, redirected) = graph;
         let snapshot =
             Snapshot::load(graph, &NoteSource).map_err(crate::provenance::from_mdstore)?;
         Ok(Workspace {
             snapshot,
             source: NoteSource,
+            redirected: redirected.into_iter().map(|(u, p)| (u, p.display().to_string())).collect(),
         })
     }
 
@@ -352,14 +385,17 @@ impl Workspace {
             .enumerate()
             .map(|(i, m)| StoreRow {
                 alias: m.alias_path.join("/"),
+                remote: m.content.as_ref().is_some_and(|c| c.is_remote()),
+                age: m.content.as_ref().and_then(|c| c.fetch_age()),
                 source: if m.alias_path.is_empty() {
                     // The vantage store: show where it is, not the "."
                     // it was opened with.
-                    m.root
+                    m.content
                         .as_ref()
+                        .and_then(|c| c.dir())
                         .map(|p| {
                             p.canonicalize()
-                                .unwrap_or_else(|_| p.clone())
+                                .unwrap_or_else(|_| p.to_path_buf())
                                 .display()
                                 .to_string()
                         })
@@ -371,6 +407,7 @@ impl Workspace {
                             Some(r) => format!("{url}@{r}"),
                             None => url.clone(),
                         },
+                        mdstore::StoreSource::Blob { url } => url.clone(),
                     }
                 },
                 notes: self.snapshot.member_documents(i).count(),
@@ -404,9 +441,82 @@ impl Workspace {
         }
     }
 
+    /// Fetch every declared remote store into the cache.
+    pub fn sync_all(&self) -> Vec<(String, Result<()>)> {
+        let mut results = Vec::new();
+        for (i, member) in self.snapshot.graph.members.iter().enumerate() {
+            if i == 0 || matches!(member.source, mdstore::StoreSource::Path(_)) {
+                continue;
+            }
+            let alias = member.alias_path.join("/");
+            let outcome = mdstore::store::sync_source(&member.source)
+                .map_err(crate::provenance::from_mdstore);
+            results.push((alias, outcome));
+        }
+        results
+    }
+
+    /// Dependencies that the registry redirected to a local checkout.
+    ///
+    /// A check that resolves through one of these proves nothing about
+    /// any other machine: the checkout can hold commits that were never
+    /// pushed.
+    pub fn redirected(&self) -> &[(String, String)] {
+        &self.redirected
+    }
+
+    /// References that resolve only because the registry redirected a
+    /// dependency to a local checkout.
+    ///
+    /// This re-resolves the closure through the declared sources. A
+    /// reference that resolves here but not there is a reference that
+    /// works on this machine and nowhere else.
+    pub fn override_only_refs(&self, root: &Utf8Path) -> Vec<(String, String)> {
+        if self.redirected.is_empty() {
+            return Vec::new();
+        }
+        // The declared closure: no registry, so a git dependency
+        // resolves through the cache clone of its declared URL.
+        let Ok(graph) = StoreGraph::open(root.as_std_path(), &LocalPaths) else {
+            return Vec::new();
+        };
+        let Ok(declared) = Snapshot::load(graph, &NoteSource) else {
+            return Vec::new();
+        };
+        let aliases = self.snapshot.graph.config(0).aliases();
+        let mut found = Vec::new();
+        for (id, entry) in self.snapshot.member_documents(0) {
+            let _ = id;
+            for text in NoteSource
+                .references(&entry.doc, 0, &self.snapshot.graph)
+                .iter()
+                .map(|r| r.to_string())
+            {
+                let r = StoreRef::parse(&text, &aliases);
+                if !r.is_foreign() {
+                    continue;
+                }
+                let here = self.snapshot.resolve_from(0, &r, &self.source).is_some();
+                let there = declared.resolve_from(0, &r, &NoteSource).is_some();
+                if here && !there {
+                    found.push((entry.id.clone(), text));
+                }
+            }
+        }
+        found
+    }
+
     /// The vantage store's root directory.
     pub fn root(&self) -> Utf8PathBuf {
-        let root = self.snapshot.graph.root().root.clone().unwrap_or_default();
+        let root = self
+            .snapshot
+            .graph
+            .root()
+            .content
+            .as_ref()
+            .and_then(|c| c.dir())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_default();
         Utf8PathBuf::from_path_buf(root).unwrap_or_default()
     }
 

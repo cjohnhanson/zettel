@@ -1,0 +1,37 @@
+# A declared remote store that the cache does not hold yet. Nothing
+# reaches the network until an explicit sync, so the store is
+# unavailable and every other command still works.
+transitions:
+  - name: "sync the remote store"
+    command: "zettel store sync"
+    target: "../has-synced-store"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+        - path: "upstream/"
+          ignore: true
+        - path: ".mdstore-cache/"
+          ignore: true
+        # The URL holds this machine's path, so the file cannot be a
+        # fixed fixture.
+        - path: "stores.yml"
+          ignore: true
+
+assertions:
+  - name: "the remote store is unavailable before a sync"
+    command: "zettel store list | grep -q 'unavailable'"
+  - name: "the message says what to do"
+    command: "zettel store list | grep -q 'run store sync'"
+  - name: "reads do not reach the network"
+    command: "test ! -d .mdstore-cache"
+  - name: "the local store still works"
+    command: "zettel note list"
+    stdout: ""
+  - name: "graph commands say the closure is partial"
+    command: "zettel orphans 2>&1 >/dev/null | grep -q 'partial'"
+  - name: "check names the unreachable store"
+    command: "zettel check 2>&1 | grep -q 'unreachable store'"
+  - name: "check exits nonzero"
+    command: "zettel check"
+    should_fail: true

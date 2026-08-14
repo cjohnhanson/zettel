@@ -121,6 +121,25 @@ transitions:
       files:
         - path: ".zettel/"
           ignore: true
+  # A remote store: a git repository beside this one, declared by URL.
+  # It is not readable until an explicit sync fetches it.
+  - name: "declare a remote store"
+    command: |
+      mkdir -p upstream && (cd upstream &&
+        zettel init &&
+        zettel note create 'Handbook entry' -p human:dana -b 'How the team deploys.' &&
+        git init -q -b main && git add -A && git commit -qm one) &&
+      printf 'format: 2\nstores:\n  - alias: handbook\n    git: file://%s/upstream\n' "$PWD" > stores.yml
+    target: "../has-remote-store"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+        - path: "upstream/"
+          ignore: true
+        - path: "stores.yml"
+          ignore: true
+
   - name: "enter cli edge checks"
     command: "true"
     target: "../cli-edges"

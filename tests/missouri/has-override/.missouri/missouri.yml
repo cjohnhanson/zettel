@@ -1,0 +1,22 @@
+# The registry binds the declared URL to a local checkout. The checkout
+# holds a note that was never committed, so a reference to it resolves
+# here and nowhere else. check must say so.
+assertions:
+  - name: "the override resolves the reference"
+    command: "zettel note show handbook:unpushed-idea --field title"
+    stdout: "Unpushed idea\n"
+  - name: "the store reads from the checkout, not the cache"
+    command: "zettel store list | grep handbook | grep -q 'synced'"
+    should_fail: true
+  - name: "check warns that the reference resolves only here"
+    command: "zettel check 2>&1 | grep -q 'resolves only through a local checkout'"
+  - name: "the warning names the note that made the reference"
+    command: "zettel check 2>&1 | grep 'resolves only' | grep -q 'cites-unpushed'"
+  - name: "check exits nonzero"
+    command: "zettel check"
+    should_fail: true
+  - name: "a reference that the declared source also holds is not warned"
+    command: "zettel note create 'Cites pushed' -b 'See [[handbook:handbook-entry]].' >/dev/null && zettel check 2>&1 | grep 'resolves only' | grep -q 'cites-pushed'"
+    should_fail: true
+  - name: "an override that is not there is an error, not a silent fallback"
+    command: "printf 'stores:\\n  - git: file://%s/upstream\\n    path: %s/gone\\n' \"$PWD\" \"$PWD\" > .mdstore-registry.yml && zettel store list | grep -q 'registry binds'"
