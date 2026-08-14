@@ -16,7 +16,7 @@ camino = { version = "1", features = ["serde1"] }
 clap = { version = "4", features = ["derive", "env", "unicode", "wrap_help"] }
 clap_complete = "4"
 clap_mangen = "0.2"
-mdstore = { path = "../mdstore" }  # TEMPORARY: pin the rev before merge
+mdstore = { git = "https://github.com/cjohnhanson/mdstore", rev = "d87cd4a" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yml = "0.0"
