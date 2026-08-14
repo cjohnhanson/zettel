@@ -1,0 +1,86 @@
+# A vantage store with one declared dependency. The direction rule is
+# the point: the vantage sees into the dependency, and the dependency
+# cannot see back.
+assertions:
+  - name: "store list shows the vantage and the dependency"
+    command: "test $(zettel store list | wc -l) -eq 2"
+  - name: "store list names the dependency alias"
+    command: "zettel store list | grep -q '^dep '"
+  - name: "note list shows only the vantage's own notes"
+    command: "test $(zettel note list --format json | jq 'length') -eq 1"
+
+  # Cross-store resolution
+  - name: "a dependency note resolves through its alias"
+    command: "zettel note show dep:pooling-causes-stale-reads --field title"
+    stdout: "Pooling causes stale reads\n"
+  - name: "the 4-character prefix works across the boundary too"
+    command: "zettel note show dep:$(cd dep && zettel note list --format json | jq -r '.[0].id' | cut -c1-4) --field title"
+    stdout: "Pooling causes stale reads\n"
+  - name: "an undeclared alias does not resolve"
+    command: "zettel note show nope:pooling-causes-stale-reads"
+    should_fail: true
+
+  # The direction rule
+  - name: "backlinks on a dependency note include the vantage's annotation"
+    command: "zettel backlinks dep:pooling-causes-stale-reads | grep -q 'My annotation'"
+  - name: "the dependency's own vantage cannot see the annotation"
+    command: "cd dep && zettel backlinks pooling-causes-stale-reads"
+    stdout: ""
+  - name: "the dependency's own vantage sees one store"
+    command: "cd dep && test $(zettel store list | wc -l) -eq 1"
+  - name: "the dependency note is an orphan from its own vantage"
+    command: "cd dep && zettel orphans | grep -q 'Pooling'"
+  - name: "and not an orphan from the vantage that links it"
+    command: "zettel orphans | grep -q 'Pooling'"
+    should_fail: true
+
+  # Output contract
+  - name: "context crosses the boundary and qualifies the foreign note"
+    command: "zettel context my-annotation -d 1 | grep -q '^--- dep:'"
+  - name: "a local note stays bare in the same output"
+    command: "zettel context my-annotation -d 1 | grep -q '^--- [a-z0-9]\\{4\\}-my-annotation ---$'"
+  - name: "a printed id resolves back through the same grammar"
+    command: "zettel note show \"$(zettel context my-annotation -d 1 | grep -m1 '^--- dep:' | sed 's/--- //;s/ ---//')\" --field title"
+    stdout: "Pooling causes stale reads\n"
+  - name: "json carries the store of each note"
+    command: "zettel orphans --format json | jq -e 'all(has(\"store\"))'"
+  - name: "backlinks json qualifies the id"
+    command: "zettel backlinks dep:pooling-causes-stale-reads --format json | jq -e '.[0].store == \"\"'"
+
+  # Dependencies are read-only through the closure
+  - name: "editing a dependency note is refused"
+    command: "! zettel note edit dep:pooling-causes-stale-reads --add-tag mine >/dev/null 2>&1 && zettel note edit dep:pooling-causes-stale-reads --add-tag mine 2>&1 >/dev/null | grep -q 'read-only'"
+  - name: "deleting a dependency note is refused"
+    command: "zettel note delete dep:pooling-causes-stale-reads"
+    should_fail: true
+  - name: "the dependency note is untouched"
+    command: "cd dep && zettel note show pooling-causes-stale-reads --field tags"
+    stdout: "db\n"
+  - name: "editing a local note still works"
+    command: "zettel note edit my-annotation --add-tag mine && zettel note show my-annotation --field tags"
+    stdout: "mine\n"
+
+  # check
+  - name: "a working cross-store link is not a broken link"
+    command: "zettel check"
+    stdout: "no broken links\n"
+  - name: "a private store may declare a local path"
+    command: "zettel check 2>&1 | grep -q 'declaration'"
+    should_fail: true
+  - name: "a dangling cross-store reference is reported"
+    command: "zettel note create 'Dangler' -b 'See [[dep:nonexistent]].' >/dev/null && zettel check 2>&1 | grep -q 'dep:nonexistent'"
+  - name: "check exits nonzero with the dangling reference"
+    command: "zettel check"
+    should_fail: true
+  - name: "an undeclared-alias reference is reported too"
+    command: "zettel note create 'Undeclared' -b 'See [[nope:x]].' >/dev/null && zettel check 2>&1 | grep -q 'nope:x'"
+
+  # A shared store opts into the reachability rule
+  - name: "a shared store may not declare a path that leaves the repo"
+    command: "printf 'shared: true\\nstores:\\n  - alias: out\\n    path: ../elsewhere\\n' > dep/stores.yml && cd dep && zettel check 2>&1 | grep -q 'must declare an outside dependency by git URL'"
+  - name: "an unreachable declared store is named"
+    command: "cd dep && zettel check 2>&1 | grep -q 'unreachable store'"
+  - name: "the unreachable store does not stop the command"
+    command: "cd dep && zettel note list | grep -q 'Pooling'"
+  - name: "graph answers say when the closure is partial"
+    command: "cd dep && zettel orphans 2>&1 >/dev/null | grep -q 'partial'"

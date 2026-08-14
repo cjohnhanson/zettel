@@ -27,6 +27,14 @@ pub enum Error {
     #[error("invalid selector '{0}'; use tag:<value>, provenance:<token>, or link:<id>")]
     InvalidSelector(String),
 
+    #[error("store '{0}' is not declared in stores.yml")]
+    UndeclaredStore(String),
+
+    #[error(
+        "'{0}' is in store '{1}'; dependency stores are read-only — run the command from that store to edit it"
+    )]
+    ForeignWrite(String, String),
+
     #[error("unknown field '{0}'")]
     UnknownField(String),
 
