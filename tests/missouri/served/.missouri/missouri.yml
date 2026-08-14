@@ -1,0 +1,64 @@
+doc: |
+  The same store, read through a server instead of the command line.
+  A scripted JSON-RPC session over stdio drives it, so the checks are
+  deterministic: no port, no background process.
+
+assertions:
+  # What the server declares
+  - name: "the server declares the surfaces it was asked for"
+    command: "mcp 'zettel serve' | jq -e 'select(.id==1) | .result.capabilities | has(\"tools\") and has(\"resources\")'"
+  - name: "trimming the surfaces drops the capability"
+    command: "mcp 'zettel serve --surfaces tools' | jq -e 'select(.id==1) | .result.capabilities | has(\"tools\") and (has(\"resources\") | not)'"
+  - name: "the instructions say how to weigh provenance"
+    command: "mcp 'zettel serve' | jq -r 'select(.id==1) | .result.instructions' | grep -q 'provenance'"
+  - name: "a read-only server says so"
+    command: "mcp 'zettel serve' | jq -r 'select(.id==1) | .result.instructions' | grep -q 'read-only'"
+
+  # The tool surface reads the same store the CLI reads
+  - name: "the tools are listed"
+    command: "mcp 'zettel serve' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}' | jq -e 'select(.id==2) | [.result.tools[].name] | index(\"zettel_read_note\")'"
+  - name: "listing notes returns the note the CLI shows"
+    command: "mcp 'zettel serve' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"zettel_list_notes\",\"arguments\":{}}}' | jq -r 'select(.id==2) | .result.content[0].text' | grep -q 'Attention is not explanation'"
+  - name: "reading a note carries its spans"
+    command: "mcp 'zettel serve' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"zettel_read_note\",\"arguments\":{\"id\":\"attention-is-not-explanation\"}}}' | jq -r 'select(.id==2) | .result.content[0].text' | jq -e 'has(\"spans\")'"
+  - name: "search answers through the server"
+    command: "mcp 'zettel serve' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"zettel_search\",\"arguments\":{\"pattern\":\"Attention\"}}}' | jq -r 'select(.id==2) | .result.content[0].text' | grep -q 'attention'"
+
+  # The resource surface names notes the way the CLI prints them
+  - name: "resources are listed with note URIs"
+    command: "mcp 'zettel serve' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/list\"}' | jq -e 'select(.id==2) | [.result.resources[].uri] | map(startswith(\"zettel://note/\")) | all'"
+  - name: "a resource carries the note's provenance"
+    command: "mcp 'zettel serve' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/list\"}' | jq -e 'select(.id==2) | .result.resources[0].description | startswith(\"provenance:\")'"
+  - name: "a listed URI reads back"
+    command: "URI=$(mcp 'zettel serve' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/list\"}' | jq -r 'select(.id==2) | .result.resources[0].uri'); mcp 'zettel serve' \"{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":3,\\\"method\\\":\\\"resources/read\\\",\\\"params\\\":{\\\"uri\\\":\\\"$URI\\\"}}\" | jq -e 'select(.id==3) | .result.contents[0].text | fromjson | has(\"spans\")'"
+
+  # A read-only server refuses writes, and never offers approval
+  - name: "a read-only server offers no write tool"
+    command: "mcp 'zettel serve' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}' | jq -e 'select(.id==2) | [.result.tools[].name] | index(\"zettel_create_note\") == null'"
+  - name: "no server offers approval, in any access mode"
+    command: "mcp 'zettel serve --access read-write' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}' | jq -e 'select(.id==2) | [.result.tools[].name] | map(test(\"review|approve\")) | any | not'"
+  - name: "a write through a read-only server is refused"
+    command: "mcp 'zettel serve' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"zettel_create_note\",\"arguments\":{\"title\":\"Nope\"}}}' | jq -r 'select(.id==2) | .result.content[0].text' | grep -q 'read-only'"
+  - name: "and nothing landed on disk"
+    command: "zettel note list | grep -q 'Nope'"
+    should_fail: true
+
+  # A writable server stamps the provenance itself
+  - name: "a note written through the server is agent-written"
+    command: "mcp 'zettel serve --access read-write' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"zettel_create_note\",\"arguments\":{\"title\":\"Served note\",\"body\":\"Derived text.\"}}}' | jq -r 'select(.id==2) | .result.content[0].text' | grep -q 'agent:summary'"
+  - name: "the stamp is on disk, and the CLI sees it"
+    command: "zettel note show served-note --field provenance"
+    stdout: "agent:summary\n"
+  - name: "the note lands in the human's review queue"
+    command: "zettel note list --unreviewed | grep -q 'Served note'"
+  - name: "a caller cannot claim human authorship"
+    command: "mcp 'zettel serve --access read-write' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"zettel_create_note\",\"arguments\":{\"title\":\"Claimed\",\"kind\":\"human\"}}}' | jq -r 'select(.id==2) | .result.content[0].text' | grep -q 'not an agent kind'"
+  - name: "the refused claim wrote nothing"
+    command: "zettel note list | grep -q 'Claimed'"
+    should_fail: true
+  - name: "an agent kind is honored when it is an agent kind"
+    command: "mcp 'zettel serve --access read-write' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"zettel_create_note\",\"arguments\":{\"title\":\"A guess\",\"kind\":\"inference\"}}}' >/dev/null && zettel note show a-guess --field provenance"
+    stdout: "agent:inference\n"
+  - name: "the human clears the queue at the command line"
+    command: "zettel note review served-note --approve all --reviewer cody >/dev/null && zettel note list --unreviewed | grep -q 'Served note'"
+    should_fail: true

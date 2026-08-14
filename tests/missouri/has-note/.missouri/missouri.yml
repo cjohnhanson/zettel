@@ -68,6 +68,14 @@ transitions:
       files:
         - path: ".zettel/"
           ignore: true
+  - name: "enter the served checks"
+    command: "true"
+    target: "../served"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+
   - name: "inject an invalid marker"
     command: |
       zettel note edit attention-is-not-explanation --body '<!-- prov robot -->
