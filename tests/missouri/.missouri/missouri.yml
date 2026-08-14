@@ -2,12 +2,8 @@ setup:
   - name: "build zettel"
     command: "cargo build --quiet --manifest-path ../../Cargo.toml"
 
-# Do not declare `packages: [jq]` here. A packages list makes missouri wrap
-# every command in `nix shell`, and that nix prepends
-# "warning: '--no-registries' is deprecated" to stderr. Six assertions in this
-# suite compare stderr exactly, so all 8 paths fail on the extra line. The
-# wrapper also costs 20x: 1m20s wall and 10m CPU, against 4.1s with jq from
-# PATH. The suite takes jq from PATH instead.
+packages:
+  - jq
 
 env:
   NO_COLOR: "1"
