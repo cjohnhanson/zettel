@@ -6,7 +6,7 @@ assignee:
 labels: [tests]
 depends_on: []
 created: 2026-08-12T21:15:24Z
-updated: "2026-08-14T14:59:01Z"
+updated: 2026-08-14T14:59:01Z
 ---
 
 The suite was unrunnable until the bin shim path fix (stale ../../../../.. from the monorepo extraction, now corrected). With the shim fixed, 6 assertions fail on one cause: nix prepends 'warning: --no-registries is deprecated; use --no-use-registries' to stderr, and the expected strings match only after that line. Fix direction: normalize or filter the nix wrapper warning in the comparison, or pin the sandbox invocation flags.
@@ -22,3 +22,4 @@ A non-hermetic workaround (dropping packages, taking jq from PATH) was merged as
 
 The fix belongs in missouri and Cody has it in flight in another session. This suite stays red against the released missouri until that lands. No further change is needed here once it does.
 FIXED in missouri (codelikecody retire-clc-config): executor now passes --no-use-registries instead of the deprecated --no-registries, so no warning pollutes asserted stderr. The zettel suite passes 8/8 in full nix mode with the fixed binary. The system missouri stays stale until the pin bump + hms.
+Fixed in #3: the stderr assertions grep for the error line instead of exact-matching the stream, tolerating the nix wrapper warning while keeping the hermetic sandbox. Suite 21/21.
