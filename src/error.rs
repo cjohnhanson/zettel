@@ -15,8 +15,17 @@ pub enum Error {
     #[error("note '{0}' already exists")]
     NoteAlreadyExists(String),
 
-    #[error("'{status}' is not a valid status")]
-    InvalidStatus { status: String },
+    #[error("invalid provenance: {0}")]
+    InvalidProvenance(String),
+
+    #[error("span {0} is not an agent span; review applies to agent spans")]
+    SpanNotAgent(usize),
+
+    #[error("no span {0}; run 'zettel note review <id>' to list the spans")]
+    SpanNotFound(usize),
+
+    #[error("invalid selector '{0}'; use tag:<value>, provenance:<token>, or link:<id>")]
+    InvalidSelector(String),
 
     #[error("unknown field '{0}'")]
     UnknownField(String),

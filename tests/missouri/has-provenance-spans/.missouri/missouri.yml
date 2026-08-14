@@ -1,0 +1,65 @@
+transitions:
+  # The exact count pins that the shared default stamps and counts once.
+  - name: "approve all agent spans"
+    command: "zettel note review attention-is-not-explanation --approve all --reviewer cody"
+    stdout: "2 span(s) approved\n"
+    target: "../spans-approved"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+
+assertions:
+  - name: "review lists four spans"
+    command: "test $(zettel note review attention-is-not-explanation | grep -c '^  ') -eq 4"
+  - name: "review shows the default span"
+    command: "zettel note review attention-is-not-explanation | grep -q 'agent:summary (default)'"
+  - name: "review shows the citation span"
+    command: "zettel note review attention-is-not-explanation | grep -q 'citation:attention p=5'"
+  - name: "note is unreviewed"
+    command: "zettel note list --unreviewed | grep -q 'Attention'"
+  - name: "read filtered to human shows only the human span"
+    command: "zettel read --provenance human | grep -q 'Checked against the follow-up paper'"
+  - name: "read filtered to human omits the inference"
+    command: "! zettel read --provenance human | grep -q 'sparse attention'"
+  - name: "read filtered to citation shows the quote"
+    command: "zettel read --provenance citation | grep -q 'Attention is not explanation.'"
+  - name: "read filtered to reviewed is empty"
+    command: "zettel read --provenance reviewed"
+    stdout: ""
+  - name: "stats counts the spans"
+    command: "zettel stats --format json | jq -e '.spans.human == 1 and .spans.agent == 2 and .spans.citation == 1 and .spans.unreviewed_agent == 2'"
+  - name: "show json carries the spans"
+    command: "zettel note show attention-is-not-explanation --format json | jq -e '[.spans[] | select(.text != \"\")] | length == 4'"
+  - name: "approving a human span fails"
+    command: "zettel note review attention-is-not-explanation --approve 6"
+    should_fail: true
+  - name: "approving a span out of range fails"
+    command: "zettel note review attention-is-not-explanation --approve 99"
+    should_fail: true
+  - name: "approving span zero fails"
+    command: "! zettel note review attention-is-not-explanation --approve 0 >/dev/null 2>&1 && zettel note review attention-is-not-explanation --approve 0 2>&1 >/dev/null | grep -q 'no span 0'"
+  - name: "a negative span number fails"
+    command: "zettel note review attention-is-not-explanation --approve=-1"
+    should_fail: true
+  - name: "an empty list item fails"
+    command: "! zettel note review attention-is-not-explanation --approve '1,,2' >/dev/null 2>&1 && zettel note review attention-is-not-explanation --approve '1,,2' 2>&1 >/dev/null | grep -q \"'' is not a span number\""
+  - name: "uppercase ALL fails"
+    command: "zettel note review attention-is-not-explanation --approve ALL"
+    should_fail: true
+  - name: "a hidden separator index is not found"
+    command: "! zettel note review attention-is-not-explanation --approve 3 >/dev/null 2>&1 && zettel note review attention-is-not-explanation --approve 3 2>&1 >/dev/null | grep -q 'no span 3'"
+  - name: "a mixed valid-and-invalid list stamps nothing"
+    command: "zettel note review attention-is-not-explanation --approve 4,99"
+    should_fail: true
+  - name: "no failure path touched the file"
+    command: "grep -q 'reviewed=' .zettel/*attention-is-not-explanation.md"
+    should_fail: true
+  - name: "filtered read labels spans and strips markers"
+    command: "zettel read --provenance human | grep -q '\\[human:cody\\]' && ! zettel read --provenance human | grep -q '<!-- prov'"
+  - name: "unfiltered read keeps the body verbatim"
+    command: "zettel read | grep -q '<!-- prov agent:inference -->'"
+  - name: "stats span line is exact"
+    command: "zettel stats | grep -qx 'spans: 1 human, 2 agent (2 unreviewed), 1 citation, 0 unknown'"
+  - name: "a span-level filter matches despite the note default"
+    command: "zettel note list --provenance citation | grep -q 'Attention'"

@@ -3,16 +3,12 @@ transitions:
     command: "zettel init"
     target: "../initialized"
 
+# The stderr checks grep instead of matching the whole stream: the nix
+# sandbox wrapper prepends a deprecation warning to stderr.
 assertions:
   - name: "note list fails before init"
-    command: "zettel note list"
-    should_fail: true
-    stderr: "error: not a zettel repository (zettel.yml not found)\n"
+    command: "! zettel note list >/dev/null 2>&1 && zettel note list 2>&1 >/dev/null | grep -q 'error: not a zettel repository (zettel.yml not found)'"
   - name: "backlinks fails before init"
-    command: "zettel backlinks foo"
-    should_fail: true
-    stderr: "error: not a zettel repository (zettel.yml not found)\n"
+    command: "! zettel backlinks foo >/dev/null 2>&1 && zettel backlinks foo 2>&1 >/dev/null | grep -q 'error: not a zettel repository (zettel.yml not found)'"
   - name: "orphans fails before init"
-    command: "zettel orphans"
-    should_fail: true
-    stderr: "error: not a zettel repository (zettel.yml not found)\n"
+    command: "! zettel orphans >/dev/null 2>&1 && zettel orphans 2>&1 >/dev/null | grep -q 'error: not a zettel repository (zettel.yml not found)'"

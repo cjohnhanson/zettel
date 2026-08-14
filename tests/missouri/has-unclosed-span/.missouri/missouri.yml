@@ -1,0 +1,12 @@
+assertions:
+  - name: "the unclosed span runs to the end"
+    command: "zettel note review unclosed-trail | grep -q 'agent:inference  an open guess'"
+  - name: "append closes the open span first"
+    command: "zettel note edit unclosed-trail --append 'human addition' && grep -q '<!-- /prov -->' .zettel/*unclosed-trail.md"
+  - name: "appended text does not inherit the open span"
+    command: "zettel read --provenance agent:inference | grep -q 'human addition'"
+    should_fail: true
+  - name: "appended text is unknown without a default"
+    command: "zettel read --provenance unknown | grep -q 'human addition'"
+  - name: "approve normalizes and stamps the agent span"
+    command: "zettel note review unclosed-trail --approve all >/dev/null && grep -q 'agent:inference reviewed=' .zettel/*unclosed-trail.md"

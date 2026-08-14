@@ -1,0 +1,24 @@
+# Partial approval arithmetic on a human-default note with two agent
+# spans, and stamp mechanics on a note carrying unknown frontmatter keys.
+assertions:
+  - name: "both agent spans are pending"
+    command: "zettel note list --unreviewed | grep -q 'Two agent spans'"
+  - name: "approve the first agent span only"
+    command: "zettel note review two-agent-spans --approve 2"
+    stdout: "1 span(s) approved\n"
+  - name: "the note stays in the queue"
+    command: "zettel note list --unreviewed | grep -q 'Two agent spans'"
+  - name: "approve all covers only the remainder"
+    command: "zettel note review two-agent-spans --approve all"
+    stdout: "1 span(s) approved\n"
+  - name: "then the queue is clear of it"
+    command: "zettel note list --unreviewed | grep -q 'Two agent spans'"
+    should_fail: true
+  - name: "the human default never got a stamp"
+    command: "zettel note show two-agent-spans --field provenance"
+    stdout: "human:cody\n"
+  - name: "duplicate indices stamp and count once"
+    command: "zettel note review extra-keys-note --approve 1,1"
+    stdout: "1 span(s) approved\n"
+  - name: "an approve rewrite keeps unknown frontmatter keys"
+    command: "grep -q '^author: someone$' .zettel/zz87-extra-keys-note.md && grep -q '^project: alpha$' .zettel/zz87-extra-keys-note.md"
