@@ -14,3 +14,10 @@ The suite was unrunnable until the bin shim path fix (stale ../../../../.. from 
 ## Scratch Notes
 
 Verified: the full suite passes with MISSOURI_SANDBOX=preinstalled (8 passed, 409 assertions). The root fix belongs in missouri: its nix sandbox invocation emits the deprecation warning into stderr that transitions assert on. Until missouri filters its own wrapper output, run this suite with MISSOURI_SANDBOX=preinstalled.
+Root cause found, and it is not in zettel. missouri's NixBackend::nix_prefix_args passes nix the deprecated '--no-registries' instead of '--no-use-registries'. nix 2.34.1 answers with 'warning: --no-registries is deprecated' on stderr, and that line merges into the stderr of every command under test. Any suite that declares packages and asserts on stderr breaks.
+
+zettel's config was never wrong. packages: [jq] stays.
+
+A non-hermetic workaround (dropping packages, taking jq from PATH) was merged as #1 and is now reverted. Hermeticity is not a tradeable cost; a suite that takes its tools from the ambient PATH no longer tests what it claims to.
+
+The fix belongs in missouri and Cody has it in flight in another session. This suite stays red against the released missouri until that lands. No further change is needed here once it does.
