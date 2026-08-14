@@ -21,13 +21,18 @@ The command makes the config file `zettel.yml` and the note directory
 
 ```bash
 zettel note create "Connection pooling causes stale reads under load" \
-  -t debugging,postgres
+  -t debugging,postgres -p agent:summary
 ```
 
 Zettel prints the note ID, for example
-`a3f2-connection-pooling-causes-stale-reads`. Zettel creates the note as a
-draft with the given title and tags. Most commands accept the 4-character
-prefix (`a3f2`) instead of the full ID.
+`a3f2-connection-pooling-causes-stale-reads`. Most commands accept the
+4-character prefix (`a3f2`) instead of the full ID.
+
+The `-p` flag sets the note's default provenance: who produced the text.
+An agent passes `agent:summary`, `agent:index`, or `agent:inference`. A
+person passes `human` or `human:<name>`. Without the flag the provenance is
+unknown, and readers treat unknown text with the most suspicion — always
+set it.
 
 Add a body on the command line:
 
@@ -46,8 +51,13 @@ zettel note list
 # Filter by tag
 zettel note list --tag postgres
 
-# Filter by status
-zettel note list --status draft
+# Filter by provenance: human, agent, agent:inference, citation,
+# reviewed, unknown. A comma list matches any.
+zettel note list --provenance human
+zettel read --provenance human,citation,reviewed
+
+# List the notes with unreviewed agent content
+zettel note list --unreviewed
 
 # Show one note
 zettel note show a3f2-connection-pooling-causes-stale-reads
@@ -108,21 +118,52 @@ zettel note edit a3f2-connection-pooling-causes-stale-reads --add-tag production
 # Append to the body
 zettel note edit a3f2-connection-pooling-causes-stale-reads --append "Confirmed: setting max_age=300 resolves this."
 
-# Promote the note to permanent; a human makes this decision
-zettel note edit a3f2-connection-pooling-causes-stale-reads --status permanent
-
 # Delete a note
 zettel note delete a3f2-connection-pooling-causes-stale-reads
 ```
 
-## The draft-to-permanent workflow
+## Mix provenance in one note
 
-1. Agents and humans create notes as **drafts** during work.
-2. Review the drafts regularly with `zettel note list --status draft`.
-3. Decide what to do with each draft. Rewrite it and promote it, merge it into
-   another note, or delete it.
-4. Promote a draft with `zettel note edit <id> --status permanent`.
+A `<!-- prov ... -->` marker overrides the note default for one section:
 
-A permanent note holds one idea. It links to the related notes. The reviewer
-rewrites it in their own words. Do not leave raw agent output in a permanent
-note.
+```bash
+zettel note edit a3f2 --append '<!-- prov citation:b7c1 p=12 -->
+> The pool serves a stale connection for up to max_age seconds.
+<!-- /prov -->
+
+<!-- prov agent:inference -->
+The retry storm on 2026-08-02 probably started here.
+<!-- /prov -->
+
+<!-- prov human:cody -->
+Confirmed with the infra team.
+<!-- /prov -->'
+```
+
+A citation names its source: another note's ID, or a `src=<url>` attribute
+for an external source. Text outside the markers keeps the note default.
+
+## The review workflow
+
+1. Agents create notes and mark spans with their provenance.
+2. A human lists the pending work: `zettel note list --unreviewed`.
+3. `zettel note review <id>` shows the numbered spans.
+4. The human approves what they stand behind:
+   `zettel note review <id> --approve all --reviewer <name>`, or
+   `--approve 2,4` for single spans. The approval writes a `reviewed=` stamp.
+5. A reader pulls trusted content with
+   `zettel read --provenance human,citation,reviewed`.
+
+Only a human runs `--approve`. Agents never write `reviewed=` stamps.
+
+## Migrate from the status model
+
+Notes from before the provenance model carry a `status:` key. Convert them
+once:
+
+```bash
+zettel migrate
+```
+
+A `permanent` note becomes `provenance: human`. A `draft` note stays
+unknown. The status key is removed either way.

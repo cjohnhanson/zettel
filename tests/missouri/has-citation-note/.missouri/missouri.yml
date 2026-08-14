@@ -1,0 +1,19 @@
+# A citation of a note is a graph edge; an external citation key is not
+# a broken link. A [[ref]] inside a marked span still drives the graph.
+assertions:
+  - name: "citing note appears in the source's backlinks"
+    command: "zettel backlinks cited-source | grep -q 'Citing note'"
+  - name: "span ref note appears in the source's backlinks"
+    command: "zettel backlinks cited-source | grep -q 'Span ref note'"
+  - name: "citation edges keep the pair out of orphans"
+    command: "zettel orphans | grep -q 'Cited source'"
+    should_fail: true
+  - name: "the external-citation note is an orphan"
+    command: "zettel orphans | grep -q 'External citation'"
+  - name: "context from the citing note reaches the source"
+    command: "zettel context citing-note --format json | jq -e '[.[].title] | index(\"Cited source\")'"
+  - name: "context from the source reaches the citing note"
+    command: "zettel context cited-source --format json | jq -e '[.[].title] | index(\"Citing note\")'"
+  - name: "an external citation key is not a broken link"
+    command: "zettel check"
+    stdout: "no broken links\n"

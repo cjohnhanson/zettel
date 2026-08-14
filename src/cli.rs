@@ -48,8 +48,11 @@ pub enum Command {
     /// Show the knowledge base statistics
     Stats(StatsArgs),
 
-    /// Check the notes for broken links
+    /// Check the notes for broken links and invalid provenance
     Check,
+
+    /// Convert pre-provenance notes (status keys) to the provenance model
+    Migrate,
 
     /// Read the bundled documentation
     Docs(DocsArgs),
@@ -80,6 +83,9 @@ pub enum NoteCommand {
 
     /// Delete a note
     Delete(NoteDeleteArgs),
+
+    /// List the provenance spans of a note, or approve agent spans
+    Review(NoteReviewArgs),
 }
 
 #[derive(Parser)]
@@ -99,9 +105,10 @@ pub struct NoteCreateArgs {
     #[arg(short, long)]
     pub body: Option<String>,
 
-    /// The initial status. The default is draft.
-    #[arg(short, long, default_value = "draft")]
-    pub status: Option<String>,
+    /// The default provenance: origin[:qualifier], for example human:cody,
+    /// agent:summary, or citation:ab12. Omitted means unknown.
+    #[arg(short, long)]
+    pub provenance: Option<String>,
 }
 
 #[derive(Parser)]
@@ -110,9 +117,15 @@ pub struct NoteListArgs {
     #[arg(short, long)]
     pub tag: Option<String>,
 
-    /// Filter by status (draft or permanent)
+    /// Filter by provenance tokens, separated with commas: human, agent,
+    /// agent:inference, citation, reviewed, unknown. A note matches when
+    /// any of its spans matches any token.
     #[arg(short, long)]
-    pub status: Option<String>,
+    pub provenance: Option<String>,
+
+    /// Keep only the notes with at least one unreviewed agent span
+    #[arg(long)]
+    pub unreviewed: bool,
 
     /// Filter by selector (namespace:value). Repeat the option to add selectors.
     #[arg(long = "where")]
@@ -152,9 +165,9 @@ pub struct NoteEditArgs {
     #[arg(long)]
     pub title: Option<String>,
 
-    /// The new status (draft or permanent)
+    /// The new default provenance: origin[:qualifier]
     #[arg(short, long)]
-    pub status: Option<String>,
+    pub provenance: Option<String>,
 
     /// Replace all tags
     #[arg(short, long = "tag")]
@@ -196,6 +209,21 @@ pub struct NoteDeleteArgs {
 }
 
 #[derive(Parser)]
+pub struct NoteReviewArgs {
+    /// The note ID
+    pub id: String,
+
+    /// Approve spans: "all" for every unreviewed agent span, or 1-based
+    /// span numbers separated with commas. Only a human runs this.
+    #[arg(long)]
+    pub approve: Option<String>,
+
+    /// The reviewer name to record with the approval
+    #[arg(long)]
+    pub reviewer: Option<String>,
+}
+
+#[derive(Parser)]
 pub struct BacklinksArgs {
     /// The note ID
     pub id: String,
@@ -221,9 +249,10 @@ pub struct ReadArgs {
     #[arg(short, long)]
     pub tag: Option<String>,
 
-    /// Filter by status (draft or permanent)
+    /// Filter by provenance tokens, separated with commas. Only the
+    /// matching spans print, and notes with no match are omitted.
     #[arg(short, long)]
-    pub status: Option<String>,
+    pub provenance: Option<String>,
 }
 
 #[derive(Parser)]
@@ -272,35 +301,28 @@ pub fn run(args: Args) -> crate::Result<()> {
             let repo = Repo::open(&root)?;
             match *cmd {
                 NoteCommand::Create(a) => {
-                    let status = a
-                        .status
-                        .map(|s| s.parse::<crate::note::Status>())
-                        .transpose()?;
                     let id = repo.create_note(
                         &a.title,
                         CreateNoteOptions {
                             tags: a.tag,
                             links: a.links,
                             body: a.body,
-                            status,
+                            provenance: a.provenance,
                         },
                     )?;
                     println!("{id}");
                     Ok(())
                 }
                 NoteCommand::List(a) => {
-                    let status = a
-                        .status
-                        .map(|s| s.parse::<crate::note::Status>())
-                        .transpose()?;
                     let selectors: Vec<crate::Selector> = a
                         .r#where
                         .iter()
-                        .filter_map(|s| crate::Selector::parse(s))
-                        .collect();
+                        .map(|s| crate::selector::parse_selector(s))
+                        .collect::<crate::Result<Vec<_>>>()?;
                     let mut notes = repo.list_notes(&ListNotesFilter {
                         tag: a.tag.as_deref(),
-                        status,
+                        provenance: a.provenance.as_deref(),
+                        unreviewed: a.unreviewed,
                     })?;
                     if !selectors.is_empty() {
                         notes.retain(|n| crate::selector::matches_all(&selectors, n));
@@ -328,7 +350,7 @@ pub fn run(args: Args) -> crate::Result<()> {
                         &a.id,
                         EditNoteOptions {
                             title: a.title.as_deref(),
-                            status: a.status.as_deref(),
+                            provenance: a.provenance.as_deref(),
                             tags: a.tag.as_deref(),
                             add_tag: a.add_tag.as_deref(),
                             remove_tag: a.remove_tag.as_deref(),
@@ -343,6 +365,44 @@ pub fn run(args: Args) -> crate::Result<()> {
                 }
                 NoteCommand::Delete(a) => {
                     repo.delete_note(&a.id)?;
+                    Ok(())
+                }
+                NoteCommand::Review(a) => {
+                    match a.approve.as_deref() {
+                        None => {
+                            let (n, spans) = repo.note_spans(&a.id)?;
+                            println!("{}  {}", n.id, n.frontmatter.title);
+                            println!();
+                            for s in &spans {
+                                let source = if s.from_default { " (default)" } else { "" };
+                                let excerpt = span_excerpt(&s.text);
+                                println!(
+                                    "  {}  {}{source}  {excerpt}",
+                                    s.index,
+                                    crate::provenance::display(s.marker.as_ref()),
+                                );
+                            }
+                        }
+                        Some("all") => {
+                            let stamped = repo.approve_spans(&a.id, None, a.reviewer.as_deref())?;
+                            println!("{stamped} span(s) approved");
+                        }
+                        Some(list) => {
+                            let indices = list
+                                .split(',')
+                                .map(|s| {
+                                    s.trim().parse::<usize>().map_err(|_| {
+                                        crate::Error::InvalidProvenance(format!(
+                                            "'{s}' is not a span number; use \"all\" or numbers separated with commas"
+                                        ))
+                                    })
+                                })
+                                .collect::<crate::Result<Vec<usize>>>()?;
+                            let stamped =
+                                repo.approve_spans(&a.id, Some(&indices), a.reviewer.as_deref())?;
+                            println!("{stamped} span(s) approved");
+                        }
+                    }
                     Ok(())
                 }
             }
@@ -384,9 +444,10 @@ pub fn run(args: Args) -> crate::Result<()> {
                         .iter()
                         .map(|r| {
                             let mut v = note_to_json(&r.note);
-                            v.as_object_mut()
-                                .unwrap()
-                                .insert("matched_fields".into(), serde_json::json!(r.matched_fields));
+                            v.as_object_mut().unwrap().insert(
+                                "matched_fields".into(),
+                                serde_json::json!(r.matched_fields),
+                            );
                             v
                         })
                         .collect();
@@ -408,18 +469,19 @@ pub fn run(args: Args) -> crate::Result<()> {
 
         Command::Read(a) => {
             let repo = Repo::open(&root)?;
-            let status = a
-                .status
-                .map(|s| s.parse::<crate::note::Status>())
-                .transpose()?;
             let notes = repo.list_notes(&ListNotesFilter {
                 tag: a.tag.as_deref(),
-                status,
+                provenance: a.provenance.as_deref(),
+                unreviewed: false,
             })?;
+            let tokens: Option<Vec<&str>> = a
+                .provenance
+                .as_deref()
+                .map(|t| t.split(',').map(str::trim).collect());
             for n in &notes {
                 println!("--- {} ---", n.id);
                 println!("title: {}", n.frontmatter.title);
-                println!("status: {}", n.frontmatter.status);
+                println!("provenance: {}", default_provenance_display(n));
                 if !n.frontmatter.tags.is_empty() {
                     println!("tags: {}", n.frontmatter.tags.join(", "));
                 }
@@ -427,9 +489,31 @@ pub fn run(args: Args) -> crate::Result<()> {
                     println!("links: {}", n.frontmatter.links.join(", "));
                 }
                 println!();
-                if !n.body.is_empty() {
-                    println!("{}", n.body);
-                    println!();
+                match &tokens {
+                    // No filter: the whole body, markers and all.
+                    None => {
+                        if !n.body.is_empty() {
+                            println!("{}", n.body);
+                            println!();
+                        }
+                    }
+                    // Filtered: only the matching spans, each labeled.
+                    Some(tokens) => {
+                        let spans = crate::provenance::resolve_spans_lenient(
+                            n.frontmatter.provenance.as_deref(),
+                            &n.body,
+                        );
+                        for s in spans
+                            .iter()
+                            .filter(|s| crate::provenance::matches_any(s.marker.as_ref(), tokens))
+                        {
+                            println!("[{}]", crate::provenance::display(s.marker.as_ref()));
+                            if !s.text.is_empty() {
+                                println!("{}", s.text);
+                            }
+                            println!();
+                        }
+                    }
                 }
             }
             Ok(())
@@ -447,7 +531,7 @@ pub fn run(args: Args) -> crate::Result<()> {
                         }
                         println!("--- {} ---", n.id);
                         println!("title: {}", n.frontmatter.title);
-                        println!("status: {}", n.frontmatter.status);
+                        println!("provenance: {}", default_provenance_display(n));
                         if !n.frontmatter.tags.is_empty() {
                             println!("tags: {}", n.frontmatter.tags.join(", "));
                         }
@@ -482,33 +566,45 @@ pub fn run(args: Args) -> crate::Result<()> {
             Ok(())
         }
 
-        Command::Docs(args) => {
-            match args.topic.as_deref() {
-                None | Some("list") => {
+        Command::Migrate => {
+            let repo = Repo::open(&root)?;
+            let changes = repo.migrate()?;
+            if changes.is_empty() {
+                println!("nothing to migrate");
+            } else {
+                for (id, action) in &changes {
+                    println!("{id}  {action}");
+                }
+                println!("{} note(s) migrated", changes.len());
+            }
+            Ok(())
+        }
+
+        Command::Docs(args) => match args.topic.as_deref() {
+            None | Some("list") => {
+                crate::docs::list();
+                Ok(())
+            }
+            Some("search") => {
+                let query = args.query.as_deref().unwrap_or("");
+                crate::docs::search(query);
+                Ok(())
+            }
+            Some(slug) => {
+                if crate::docs::show(slug) {
+                    Ok(())
+                } else {
+                    eprintln!("unknown doc: '{slug}'");
+                    eprintln!();
+                    eprintln!("available docs:");
                     crate::docs::list();
-                    Ok(())
-                }
-                Some("search") => {
-                    let query = args.query.as_deref().unwrap_or("");
-                    crate::docs::search(query);
-                    Ok(())
-                }
-                Some(slug) => {
-                    if crate::docs::show(slug) {
-                        Ok(())
-                    } else {
-                        eprintln!("unknown doc: '{slug}'");
-                        eprintln!();
-                        eprintln!("available docs:");
-                        crate::docs::list();
-                        Err(crate::Error::Io(std::io::Error::new(
-                            std::io::ErrorKind::NotFound,
-                            format!("doc '{slug}' not found"),
-                        )))
-                    }
+                    Err(crate::Error::Io(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("doc '{slug}' not found"),
+                    )))
                 }
             }
-        }
+        },
 
         Command::Stats(a) => {
             let repo = Repo::open(&root)?;
@@ -517,8 +613,13 @@ pub fn run(args: Args) -> crate::Result<()> {
                 OutputFormat::Json => {
                     let json = serde_json::json!({
                         "total": stats.total,
-                        "draft": stats.draft_count,
-                        "permanent": stats.permanent_count,
+                        "spans": {
+                            "human": stats.span_counts.human,
+                            "agent": stats.span_counts.agent,
+                            "citation": stats.span_counts.citation,
+                            "unknown": stats.span_counts.unknown,
+                            "unreviewed_agent": stats.span_counts.unreviewed_agent,
+                        },
                         "orphans": stats.orphan_count,
                         "tags": stats.tag_counts.iter().map(|(t, c)| serde_json::json!({"tag": t, "count": c})).collect::<Vec<_>>(),
                         "most_connected": stats.most_connected.iter().map(|(id, title, c)| serde_json::json!({"id": id, "title": title, "backlinks": c})).collect::<Vec<_>>(),
@@ -526,7 +627,12 @@ pub fn run(args: Args) -> crate::Result<()> {
                     println!("{}", serde_json::to_string_pretty(&json).unwrap());
                 }
                 OutputFormat::Text => {
-                    println!("{} notes ({} draft, {} permanent)", stats.total, stats.draft_count, stats.permanent_count);
+                    println!("{} notes", stats.total);
+                    let c = &stats.span_counts;
+                    println!(
+                        "spans: {} human, {} agent ({} unreviewed), {} citation, {} unknown",
+                        c.human, c.agent, c.unreviewed_agent, c.citation, c.unknown
+                    );
                     println!("{} orphans", stats.orphan_count);
                     if !stats.tag_counts.is_empty() {
                         println!();
@@ -535,7 +641,9 @@ pub fn run(args: Args) -> crate::Result<()> {
                             println!("  {tag}: {count}");
                         }
                     }
-                    if !stats.most_connected.is_empty() && stats.most_connected.iter().any(|(_, _, c)| *c > 0) {
+                    if !stats.most_connected.is_empty()
+                        && stats.most_connected.iter().any(|(_, _, c)| *c > 0)
+                    {
                         println!();
                         println!("Most connected:");
                         for (id, title, count) in &stats.most_connected {
@@ -558,8 +666,28 @@ fn print_note_list(notes: &[Note]) {
         } else {
             format!("  [{}]", n.frontmatter.tags.join(", "))
         };
-        println!("{}  {}{tags}  {}", n.id, n.frontmatter.status, n.frontmatter.title);
+        println!(
+            "{}  {}{tags}  {}",
+            n.id,
+            default_provenance_display(n),
+            n.frontmatter.title
+        );
     }
+}
+
+/// The note's default provenance spec for display, or `unknown`.
+fn default_provenance_display(n: &Note) -> &str {
+    n.frontmatter.provenance.as_deref().unwrap_or("unknown")
+}
+
+/// The first line of a span, shortened for the review listing.
+fn span_excerpt(text: &str) -> String {
+    let first = text.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+    let mut excerpt: String = first.trim().chars().take(60).collect();
+    if first.trim().chars().count() > 60 {
+        excerpt.push('…');
+    }
+    excerpt
 }
 
 fn print_note_list_json(notes: &[Note]) {
@@ -571,7 +699,7 @@ fn note_to_json(n: &Note) -> serde_json::Value {
     serde_json::json!({
         "id": n.id,
         "title": n.frontmatter.title,
-        "status": n.frontmatter.status.to_string(),
+        "provenance": n.frontmatter.provenance,
         "tags": n.frontmatter.tags,
         "links": n.frontmatter.links,
         "body": n.body,
@@ -579,19 +707,36 @@ fn note_to_json(n: &Note) -> serde_json::Value {
 }
 
 fn print_note_json(n: &Note) {
-    println!("{}", serde_json::to_string_pretty(&note_to_json(n)).unwrap());
+    // `show --format json` carries the resolved spans so an agent can
+    // treat each piece of text by its provenance.
+    let spans: Vec<serde_json::Value> =
+        crate::provenance::resolve_spans_lenient(n.frontmatter.provenance.as_deref(), &n.body)
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "provenance": crate::provenance::display(s.marker.as_ref()),
+                    "from_default": s.from_default,
+                    "text": s.text,
+                })
+            })
+            .collect();
+    let mut json = note_to_json(n);
+    json.as_object_mut()
+        .unwrap()
+        .insert("spans".into(), serde_json::Value::Array(spans));
+    println!("{}", serde_json::to_string_pretty(&json).unwrap());
 }
 
 fn print_note_show(n: &Note) {
     println!("{}", n.id);
     println!();
-    println!("  {:<10}{}", "Title:", n.frontmatter.title);
-    println!("  {:<10}{}", "Status:", n.frontmatter.status);
+    println!("  {:<14}{}", "Title:", n.frontmatter.title);
+    println!("  {:<14}{}", "Provenance:", default_provenance_display(n));
     if !n.frontmatter.tags.is_empty() {
-        println!("  {:<10}{}", "Tags:", n.frontmatter.tags.join(", "));
+        println!("  {:<14}{}", "Tags:", n.frontmatter.tags.join(", "));
     }
     if !n.frontmatter.links.is_empty() {
-        println!("  {:<10}{}", "Links:", n.frontmatter.links.join(", "));
+        println!("  {:<14}{}", "Links:", n.frontmatter.links.join(", "));
     }
     if !n.body.is_empty() {
         println!();
@@ -602,7 +747,7 @@ fn print_note_show(n: &Note) {
 fn print_note_field(n: &Note, field: &str) -> crate::Result<()> {
     let value = match field {
         "title" => Some(n.frontmatter.title.clone()),
-        "status" => Some(n.frontmatter.status.to_string()),
+        "provenance" => Some(default_provenance_display(n).to_string()),
         "tags" => Some(n.frontmatter.tags.join(", ")),
         "links" => Some(n.frontmatter.links.join(", ")),
         "body" => Some(n.body.clone()),

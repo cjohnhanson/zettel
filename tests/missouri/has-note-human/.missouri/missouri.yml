@@ -1,0 +1,16 @@
+assertions:
+  - name: "provenance is human"
+    command: "zettel note show attention-is-not-explanation --field provenance"
+    stdout: "human\n"
+  - name: "list provenance filter human"
+    command: "zettel note list --provenance human | grep -q 'Attention'"
+  - name: "list provenance filter unknown is empty"
+    command: "zettel note list --provenance unknown"
+    stdout: ""
+  - name: "create with provenance"
+    command: "zettel note create 'Direct human note' -p human:cody && zettel note list --provenance human --format json | jq -e 'length == 2'"
+  - name: "create with invalid provenance fails"
+    command: "zettel note create 'Bad note' -p robot"
+    should_fail: true
+  - name: "where provenance:human selector matches both human notes"
+    command: "test $(zettel note list --where provenance:human --format json | jq 'length') -eq 2"

@@ -1,0 +1,16 @@
+assertions:
+  - name: "unmarked text is unknown"
+    command: "zettel note review marked-no-default | grep -q 'unknown (default)  unmarked opening text'"
+  - name: "the marked span keeps its provenance"
+    command: "zettel note review marked-no-default | grep -q 'agent:inference  a guess'"
+  - name: "filtered read labels the unknown span"
+    command: "zettel read --provenance unknown | grep -q '\\[unknown\\]'"
+  - name: "approve stamps only the marked agent span"
+    command: "zettel note review marked-no-default --approve all"
+    stdout: "1 span(s) approved\n"
+  - name: "no provenance key appears in the frontmatter"
+    command: "grep -q '^provenance:' .zettel/*marked-no-default.md"
+    should_fail: true
+  - name: "the unknown span stays unknown after approval"
+    command: "zettel note show marked-no-default --field provenance"
+    stdout: "unknown\n"

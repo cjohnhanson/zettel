@@ -1,0 +1,27 @@
+# Three corrupt files (YAML-typed provenance, empty file, bad spec
+# string) and a prefix collision, next to one good note. Repo-wide
+# commands must survive all of it; check must name every finding.
+assertions:
+  - name: "list survives and shows the parseable notes"
+    command: "test $(zettel note list --format json 2>/dev/null | jq 'length') -eq 4"
+  - name: "list warns about each skipped file on stderr"
+    command: "zettel note list 2>&1 >/dev/null | grep -c 'warning: skipping zz' | grep -qx '2'"
+  - name: "the list column shows the bad spec verbatim"
+    command: "zettel note list 2>/dev/null | grep 'zz88' | grep -q 'robot'"
+  - name: "the bad spec degrades to unknown for filtering"
+    command: "zettel note list --provenance unknown 2>/dev/null | grep -q 'zz88'"
+  - name: "stats and read and orphans survive"
+    command: "zettel stats >/dev/null 2>&1 && zettel read >/dev/null 2>&1 && zettel orphans >/dev/null 2>&1"
+  - name: "check names the typed-provenance file"
+    command: "zettel check 2>/dev/null | grep 'zz90-corrupt-typed' | grep -q '\\[frontmatter\\]'; test $? -eq 0"
+  - name: "check names the empty file"
+    command: "zettel check 2>/dev/null | grep 'zz89-empty-file' | grep -q '\\[frontmatter\\]'; test $? -eq 0"
+  - name: "check names the bad spec"
+    command: "zettel check 2>/dev/null | grep 'zz88-bad-spec' | grep -q '\\[provenance\\]'; test $? -eq 0"
+  - name: "check exits nonzero"
+    command: "zettel check"
+    should_fail: true
+  - name: "ambiguous prefix fails cleanly"
+    command: "! zettel note show zz96 >/dev/null 2>&1 && zettel note show zz96 2>&1 >/dev/null | grep -q 'ambiguous prefix'"
+  - name: "ambiguous prefix review stamps nothing"
+    command: "! zettel note review zz96 --approve all >/dev/null 2>&1 && ! grep -q 'reviewed=' .zettel/zz96-twin-a.md && ! grep -q 'reviewed=' .zettel/zz96-twin-b.md"

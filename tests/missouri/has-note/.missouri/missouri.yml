@@ -27,9 +27,29 @@ transitions:
       files:
         - path: ".zettel/"
           ignore: true
-  - name: "promote to permanent"
-    command: "zettel note edit attention-is-not-explanation --status permanent"
-    target: "../has-note-permanent"
+  - name: "set provenance to human"
+    command: "zettel note edit attention-is-not-explanation --provenance human"
+    target: "../has-note-human"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "append provenance spans"
+    command: |
+      zettel note edit attention-is-not-explanation --provenance agent:summary --append 'The paper shows attention weights are not explanations.
+
+      <!-- prov citation:attention p=5 -->
+      > Attention is not explanation.
+      <!-- /prov -->
+
+      <!-- prov agent:inference -->
+      The claim probably extends to sparse attention too.
+      <!-- /prov -->
+
+      <!-- prov human:cody -->
+      Checked against the follow-up paper; the claim held.
+      <!-- /prov -->'
+    target: "../has-provenance-spans"
     comparators:
       files:
         - path: ".zettel/"
@@ -44,6 +64,16 @@ transitions:
   - name: "add dangling link"
     command: "zettel note edit attention-is-not-explanation --add-link nonexistent-note"
     target: "../has-dangling-link"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+  - name: "inject an invalid marker"
+    command: |
+      zettel note edit attention-is-not-explanation --body '<!-- prov robot -->
+      mystery text
+      <!-- /prov -->'
+    target: "../has-invalid-marker"
     comparators:
       files:
         - path: ".zettel/"
@@ -85,19 +115,24 @@ assertions:
   - name: "duplicate slug rejected"
     command: "zettel note create 'Attention is not explanation'"
     should_fail: true
-  - name: "default status is draft"
-    command: "zettel note show attention-is-not-explanation --field status"
-    stdout: "draft\n"
-  - name: "list shows status"
-    command: "zettel note list | grep -q 'draft'"
-  - name: "list status filter draft"
-    command: "test $(zettel note list --status draft --format json | jq 'length') -eq 1"
-  - name: "list status filter permanent is empty"
-    command: "zettel note list --status permanent"
+  - name: "default provenance is unknown"
+    command: "zettel note show attention-is-not-explanation --field provenance"
+    stdout: "unknown\n"
+  - name: "list shows provenance"
+    command: "zettel note list | grep -q 'unknown'"
+  - name: "list provenance filter unknown"
+    command: "test $(zettel note list --provenance unknown --format json | jq 'length') -eq 1"
+  - name: "list provenance filter human is empty"
+    command: "zettel note list --provenance human"
     stdout: ""
-  - name: "json has status field"
-    command: "zettel note show attention-is-not-explanation --format json | jq -r '.status'"
-    stdout: "draft\n"
+  - name: "invalid provenance filter fails"
+    command: "zettel note list --provenance robot"
+    should_fail: true
+  - name: "json provenance is null when unknown"
+    command: "zettel note show attention-is-not-explanation --format json | jq -e '.provenance == null'"
+  - name: "unreviewed is empty without agent content"
+    command: "zettel note list --unreviewed"
+    stdout: ""
   - name: "search by title"
     command: "zettel search 'Attention' | grep -q 'title'"
   - name: "search by body"
@@ -113,18 +148,31 @@ assertions:
     command: "zettel search 'Attention' --format json | jq -e '.[0].matched_fields | index(\"title\")'"
   - name: "read shows full content"
     command: "zettel read --tag ml | grep -q 'Attention is not explanation'"
-  - name: "read by status"
-    command: "zettel read --status draft | grep -q 'Attention'"
+  - name: "read by provenance"
+    command: "zettel read --provenance unknown | grep -q 'Attention'"
   - name: "stats shows count"
     command: "zettel stats | grep -q '1 notes'"
-  - name: "stats shows draft count"
-    command: "zettel stats | grep -q '1 draft'"
+  - name: "stats shows span counts"
+    command: "zettel stats | grep -q 'spans:'"
   - name: "stats json is valid"
     command: "zettel stats --format json | jq -e '.total == 1'"
-  - name: "stats json has draft count"
-    command: "zettel stats --format json | jq -e '.draft == 1'"
+  - name: "stats json has span counts"
+    command: "zettel stats --format json | jq -e '.spans.unreviewed_agent == 0'"
   - name: "check passes with no broken links"
     command: "zettel check"
     stdout: "no broken links\n"
   - name: "orphans json format"
     command: "zettel orphans --format json | jq -e 'type == \"array\"'"
+  - name: "colonless where selector fails"
+    command: "! zettel note list --where tagml >/dev/null 2>&1 && zettel note list --where tagml 2>&1 >/dev/null | grep -q \"invalid selector 'tagml'\""
+  - name: "unknown where namespace fails"
+    command: "zettel note list --where bogus:x"
+    should_fail: true
+  - name: "unknown show field fails naming it"
+    command: "! zettel note show attention-is-not-explanation --field nope >/dev/null 2>&1 && zettel note show attention-is-not-explanation --field nope 2>&1 >/dev/null | grep -q \"unknown field 'nope'\""
+  - name: "field wins over json format"
+    command: "zettel note show attention-is-not-explanation --field title --format json"
+    stdout: "Attention is not explanation\n"
+  - name: "invalid search regex fails cleanly"
+    command: "zettel search '['"
+    should_fail: true

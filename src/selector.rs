@@ -3,6 +3,19 @@ pub use mdstore::selector::Selector;
 
 use crate::note::Note;
 
+pub const NAMESPACES: [&str; 3] = ["tag", "provenance", "link"];
+
+/// Parse and validate one selector. A colonless value or an unknown
+/// namespace is an error, so a typo cannot silently disable the filter
+/// and list everything.
+pub fn parse_selector(s: &str) -> crate::Result<Selector> {
+    let sel = Selector::parse(s).ok_or_else(|| crate::Error::InvalidSelector(s.into()))?;
+    if !NAMESPACES.contains(&sel.namespace.as_str()) {
+        return Err(crate::Error::InvalidSelector(s.into()));
+    }
+    Ok(sel)
+}
+
 /// Return true if the note matches the selector.
 pub fn matches_note(selector: &Selector, note: &Note) -> bool {
     match selector.namespace.as_str() {
@@ -11,7 +24,11 @@ pub fn matches_note(selector: &Selector, note: &Note) -> bool {
             .tags
             .iter()
             .any(|t| t.as_str() == selector.value),
-        "status" => note.frontmatter.status.to_string() == selector.value,
+        "provenance" => crate::provenance::note_matches_tokens(
+            note.frontmatter.provenance.as_deref(),
+            &note.body,
+            &[selector.value.as_str()],
+        ),
         "link" => note
             .frontmatter
             .links

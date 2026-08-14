@@ -1,0 +1,8 @@
+assertions:
+  # Pinned: a [[ref]] inside quoted citation text is still checked. A
+  # quote can dangle by design; check flags it and the human decides.
+  - name: "a dangling ref inside a quote is flagged"
+    command: "zettel check 2>/dev/null | grep 'nonexistent-note' | grep -q '\\[body\\]'; test $? -eq 0"
+  - name: "check exits nonzero"
+    command: "zettel check"
+    should_fail: true

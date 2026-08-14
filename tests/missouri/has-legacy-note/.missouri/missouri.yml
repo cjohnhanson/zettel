@@ -1,0 +1,16 @@
+transitions:
+  - name: "migrate"
+    command: "zettel migrate"
+    target: "../migrated"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+
+assertions:
+  - name: "both legacy notes list with unknown provenance"
+    command: "test $(zettel note list --provenance unknown --format json | jq 'length') -eq 2"
+  - name: "the status key survives as an extra key"
+    command: "grep -q '^status: permanent$' .zettel/zz99-old-permanent-note.md"
+  - name: "an edit keeps the status key"
+    command: "zettel note edit zz98 --add-tag rough && grep -q '^status: draft$' .zettel/zz98-old-draft-note.md"

@@ -7,9 +7,10 @@ code.
 
 Zettel solves one problem. During research an agent reads code, traces bugs,
 and compares options. That work is usually lost at the end of the session.
-Zettel writes the work down as draft notes. A human reviews the drafts later
-and promotes them into a permanent knowledge base. The notes are plain text.
-Git tracks them. Zettel needs no external service.
+Zettel writes the work down as notes labeled with their provenance: who
+produced each piece of text, and what kind of claim it makes. A human reviews
+the agent content later and approves what they stand behind. The notes are
+plain text. Git tracks them. Zettel needs no external service.
 
 ## Install
 
@@ -32,17 +33,20 @@ The full command set:
 
 ```sh
 zettel init                                  # make .zettel/ in a git repo
-zettel note create "Title" --tag a,b         # make a draft note; separate tags with commas
-zettel note list [--tag t] [--status s]      # list the notes
+zettel note create "Title" -t a,b -p agent:summary   # make a note; set tags and provenance
+zettel note list [--tag t] [--provenance p]  # list the notes
+zettel note list --unreviewed                # list the notes with unreviewed agent content
 zettel note show <id>                        # show the full content of one note
 zettel note edit <id> --add-link b7c1        # link one note to another
+zettel note review <id> [--approve all]      # list provenance spans; approve agent content
 zettel note delete <id>                      # remove a note
-zettel read [--tag t] [--status s]           # show the full content of the matching notes
+zettel read [--tag t] [--provenance p]       # show the content of the matching notes/spans
 zettel search <pattern>                      # search all notes with a regex
 zettel backlinks <id>                        # show the notes that link to this note
 zettel context <id> --depth N                # show the notes within N hops
 zettel orphans                               # show the notes with no links
-zettel check                                 # check the notes for broken links
+zettel check                                 # check for broken links and invalid provenance
+zettel migrate                               # convert pre-provenance notes (status keys)
 zettel stats                                 # show counts, tag distribution, and connectivity
 zettel docs [topic]                          # show the bundled documentation
 ```
@@ -57,11 +61,19 @@ id: a3f2
 title: Connection pooling causes stale reads
 tags: [bug, postgres]
 links: [b7c1]
-status: draft
+provenance: agent:summary
 ---
 
 After failover, the pool reuses sockets bound to the old primary.
 See [[b7c1]] for the workaround.
+
+<!-- prov agent:inference -->
+The 2026-08-02 retry storm probably started here.
+<!-- /prov -->
+
+<!-- prov human:cody -->
+Confirmed with the infra team.
+<!-- /prov -->
 ```
 
 Zettel keeps the notes in one flat `.zettel/` directory:
@@ -76,10 +88,23 @@ Notes connect through the frontmatter `links` field and inline `[[id]]`
 references. Zettel walks the note graph. It computes backlinks, finds the
 orphan notes, shows the neighborhood of a note, and checks for broken links.
 
-Every note has a status. A `draft` note is working material. An agent usually
-writes it during research. A `permanent` note is reviewed material, written in
-the author's own words. Only a human promotes a note from draft to permanent.
-Agents write drafts. Humans build the permanent knowledge base.
+Every piece of text has a provenance. The frontmatter `provenance:` key sets
+the note default; a `<!-- prov ... -->` marker overrides it for one section.
+The origins:
+
+- `human[:name]` — a person wrote it.
+- `agent[:kind]` — an agent wrote it: a `summary` of sources, an `index`,
+  or an `inference` (a new claim not present in the sources).
+- `citation[:source]` — quoted verbatim; the source is a note ID or a
+  `src=<url>` attribute. A citation of a note is a link-graph edge.
+- No provenance means unknown. Unknown is never upgraded to human, so an
+  agent that forgets the label cannot mint human-authored text.
+
+A human approves agent content with `zettel note review <id> --approve`,
+which writes a `reviewed=` stamp. A later reader filters by all of this:
+`zettel read --provenance human,citation,reviewed` returns only the text a
+human wrote, quoted, or vouched for. The labels are convention, not proof —
+the same trust model as the files themselves.
 
 ## Documentation
 

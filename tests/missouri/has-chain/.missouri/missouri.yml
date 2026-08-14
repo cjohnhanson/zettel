@@ -12,7 +12,7 @@ assertions:
   - name: "context from third note reaches first at depth 2"
     command: "zettel context self-attention-mechanism -d 2 --format json | jq -e '[.[].title] | index(\"Attention is not explanation\")'"
   - name: "context json output has all fields"
-    command: "zettel context attention-is-not-explanation --format json | jq -e '.[0].status and .[0].tags and .[0].title'"
+    command: "zettel context attention-is-not-explanation --format json | jq -e '(.[0] | has(\"provenance\")) and .[0].tags and .[0].title'"
   - name: "no orphans in chain"
     command: "zettel orphans"
     stdout: ""

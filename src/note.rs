@@ -1,57 +1,15 @@
-use std::fmt;
-use std::str::FromStr;
-
 use chrono::Utc;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-/// The status of a note.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Status {
-    #[default]
-    Draft,
-    Permanent,
-}
-
-impl fmt::Display for Status {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Draft => f.write_str("draft"),
-            Self::Permanent => f.write_str("permanent"),
-        }
-    }
-}
-
-impl FromStr for Status {
-    type Err = crate::error::Error;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s {
-            "draft" => Ok(Self::Draft),
-            "permanent" => Ok(Self::Permanent),
-            _ => Err(crate::error::Error::InvalidStatus { status: s.into() }),
-        }
-    }
-}
-
-impl Serialize for Status {
-    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for Status {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
-        s.parse().map_err(serde::de::Error::custom)
-    }
-}
+use serde::{Deserialize, Serialize};
 
 /// The frontmatter of a note.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct NoteFrontmatter {
     pub title: String,
-    #[serde(default)]
-    pub status: Status,
+    /// The default provenance spec for unmarked body text:
+    /// `origin[:qualifier] [key=value ...]`. A missing key means the
+    /// provenance is unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
     /// Forward links to other notes. Each link is a full ID or a prefix.
@@ -77,7 +35,7 @@ pub fn new_frontmatter(title: &str) -> NoteFrontmatter {
     let now = format!("{}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"));
     NoteFrontmatter {
         title: title.into(),
-        status: Status::Draft,
+        provenance: None,
         tags: vec![],
         links: vec![],
         created: Some(now.clone()),
@@ -97,6 +55,7 @@ pub fn parse_note(content: &str) -> crate::error::Result<(NoteFrontmatter, Strin
             crate::error::Error::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
         }
         mdstore::Error::Yaml(ye) => crate::error::Error::Yaml(ye),
+        other => crate::error::Error::InvalidProvenance(other.to_string()),
     })?;
     Ok((doc.frontmatter, doc.body))
 }
@@ -112,7 +71,7 @@ pub fn serialize_note(fm: &NoteFrontmatter, body: &str) -> String {
     let now = format!("{}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"));
     let filled = NoteFrontmatter {
         title: fm.title.clone(),
-        status: fm.status,
+        provenance: fm.provenance.clone(),
         tags: fm.tags.clone(),
         links: fm.links.clone(),
         created: Some(fm.created.clone().unwrap_or_else(|| now.clone())),
@@ -123,9 +82,7 @@ pub fn serialize_note(fm: &NoteFrontmatter, body: &str) -> String {
         frontmatter: filled,
         body: body.to_string(),
     };
-    // serialize only fails when the frontmatter cannot be represented as
-    // YAML, which a struct of strings and lists cannot.
-    mdstore::document::serialize(&doc).unwrap_or_default()
+    mdstore::document::serialize(&doc).expect("frontmatter serialization must not fail")
 }
 
 #[cfg(test)]
@@ -143,7 +100,7 @@ mod serialize_tests {
         // the hand-rolled writer and produce an unparseable file.
         let fm = NoteFrontmatter {
             title: r#"a: "quoted", [bracket] and a \ backslash"#.to_string(),
-            status: Status::Permanent,
+            provenance: Some("human:cody".to_string()),
             tags: vec!["a, b".to_string(), "c: d".to_string(), "[e]".to_string()],
             links: vec!["ab12".to_string(), "x, y".to_string()],
             created: Some("2020-01-01T00:00:00Z".to_string()),
@@ -154,12 +111,24 @@ mod serialize_tests {
         assert_eq!(back.title, fm.title);
         assert_eq!(back.tags, fm.tags);
         assert_eq!(back.links, fm.links);
-        assert_eq!(back.status, Status::Permanent);
+        assert_eq!(back.provenance.as_deref(), Some("human:cody"));
+    }
+
+    #[test]
+    fn missing_provenance_stays_absent_after_an_edit() {
+        let fm = new_frontmatter("t");
+        let text = serialize_note(&fm, "body");
+        assert!(
+            !text.contains("provenance"),
+            "no provenance key when unknown"
+        );
+        let (back, _) = parse_note(&text).unwrap();
+        assert_eq!(back.provenance, None);
     }
 
     #[test]
     fn unknown_frontmatter_keys_survive_an_edit() {
-        let source = "---\ntitle: t\nstatus: draft\ntags: []\nlinks: []\ncreated: 2020-01-01T00:00:00Z\nupdated: 2020-01-01T00:00:00Z\nauthor: someone\nproject: alpha\n---\n\nbody\n";
+        let source = "---\ntitle: t\ntags: []\nlinks: []\ncreated: 2020-01-01T00:00:00Z\nupdated: 2020-01-01T00:00:00Z\nauthor: someone\nproject: alpha\n---\n\nbody\n";
         let (mut fm, body) = parse_note(source).unwrap();
         assert!(fm.extra.contains_key("author"), "unknown key captured");
         update_timestamp(&mut fm);
@@ -172,5 +141,26 @@ mod serialize_tests {
             back.extra.get("project").and_then(|v| v.as_str()),
             Some("alpha")
         );
+    }
+
+    #[test]
+    fn pre_migration_status_key_survives_as_extra() {
+        // A note from before the provenance change still parses, and its
+        // status key is kept for `zettel migrate` to convert.
+        let source = "---\ntitle: t\nstatus: permanent\ntags: []\nlinks: []\ncreated: 2020-01-01T00:00:00Z\nupdated: 2020-01-01T00:00:00Z\n---\n\nbody\n";
+        let (fm, _) = parse_note(source).unwrap();
+        assert_eq!(
+            fm.extra.get("status").and_then(|v| v.as_str()),
+            Some("permanent")
+        );
+        assert_eq!(fm.provenance, None);
+    }
+
+    #[test]
+    fn body_markers_round_trip_verbatim() {
+        let fm = new_frontmatter("t");
+        let body = "before\n<!-- prov agent:inference -->\nguess\n<!-- /prov -->\nafter";
+        let (_, back_body) = round_trip(&fm, body);
+        assert_eq!(back_body, body);
     }
 }
