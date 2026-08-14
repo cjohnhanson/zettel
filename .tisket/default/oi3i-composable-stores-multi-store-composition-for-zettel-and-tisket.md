@@ -1,6 +1,6 @@
 ---
 title: 'composable stores: multi-store composition for zettel and tisket'
-status: in_progress
+status: todo
 priority: '2'
 assignee: null
 due_date: null
@@ -8,7 +8,7 @@ labels:
 - feature
 depends_on: []
 created: '2026-08-14T20:27:44Z'
-updated: '2026-08-14T20:29:35Z'
+updated: '2026-08-14T21:01:51Z'
 ---
 
 ## End goal
@@ -117,3 +117,18 @@ Review artifact: ~/.artifacts/composable-stores/. Raw verified concerns: scratch
 46. check findings: undeclared alias, out-of-repo path in a shared config, skipped symlink, shadowed qualifier.
 47. Every printed id round-trips: an id copied from list/context/backlinks output resolves through the same command's input grammar.
 48. An existing single-store repo with no stores.yml behaves exactly as today (regression).
+## Phase 1 complete (2026-08-14), committed on feat/store-composition, unpushed
+
+mdstore (feat/store-composition, commit 3079a8a, unpushed): store.rs (StoreRef with the discrimination rule, StoresConfig from stores.yml, StoreSource path/git, identity from the resolved source, StoreGraph with cycle-safe breadth-first closure and dedup, document_dir + scan_documents guards) and snapshot.rs (load-once, forward edges, derived reverse index, optional_references for citations). 91 tests, clippy clean.
+
+zettel (feat/store-composition, commit 9681961, unpushed): workspace.rs implements DocumentSource; show/backlinks/context/orphans/check run on the snapshot; store list; dependency stores read-only on edit/delete/approve; store-qualified output and JSON store field; check gains the store findings. 18 unit tests, missouri 22/22 paths and 851 assertions, clippy clean.
+
+Design revisions delivered: R1-R11, R15-R17. Deferred to later phases: R12-R14 (git cache, registry, partial-closure annotations beyond the stderr notice).
+
+One deviation from the artifact, decided during implementation: sharedness is a declared `shared: true` key, not inferred. A private user store and a shared repo store are both git repositories, so .git presence cannot tell them apart, and inferring it made the reachability rule fire on the user store, which is exactly the store that is supposed to declare local paths.
+
+## Before the PR
+
+1. Cargo.toml has a TEMPORARY path override to ../mdstore. Push mdstore first, merge, pin the rev, drop the override.
+2. Incident, same day: employer repository names were used as example aliases in docs, README, a library comment, the tisket issue, and the artifact. Nothing had been pushed; verified via git ls-remote, git grep against origin/main in both repos, and the PR bodies. All scrubbed to `project`/`sibling`, and the mdstore commit was amended so no local history holds them. The generative rule is now in the global config under "Compartmentalization: names travel only where they belong".
+Phase 1 landed: mdstore#2 (d87cd4a) and zettel#5 (bc5b996), both merged to main. The temporary path override is gone; zettel pins the mdstore rev. Phases 2-5 (git sources, registry, tisket adoption, blob) remain.
