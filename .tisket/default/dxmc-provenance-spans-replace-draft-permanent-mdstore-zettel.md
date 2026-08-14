@@ -1,12 +1,12 @@
 ---
 title: "provenance spans replace draft/permanent (mdstore + zettel)"
-status: in_progress
+status: done
 priority:
 assignee:
 labels: [feature]
 depends_on: []
 created: 2026-08-14T15:17:17Z
-updated: 2026-08-14T15:17:53Z
+updated: "2026-08-14T19:51:46Z"
 ---
 
 ## End goal
