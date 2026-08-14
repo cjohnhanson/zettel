@@ -1,0 +1,24 @@
+# A body marker with an invalid origin, injected through edit --body.
+# Repo-wide commands degrade the note to unknown; the review command and
+# check are strict.
+assertions:
+  - name: "list survives and shows the note as unknown"
+    command: "zettel note list | grep 'Attention' | grep -q 'unknown'"
+  - name: "the degraded note leaves the unreviewed queue"
+    command: "zettel note list --unreviewed"
+    stdout: ""
+  - name: "the review listing is strict"
+    command: "! zettel note review attention-is-not-explanation >/dev/null 2>&1 && zettel note review attention-is-not-explanation 2>&1 >/dev/null | grep -q \"'robot' is not an origin\""
+  - name: "approve is strict too"
+    command: "zettel note review attention-is-not-explanation --approve all"
+    should_fail: true
+  - name: "nothing got stamped"
+    command: "grep -q 'reviewed=' .zettel/*attention-is-not-explanation.md"
+    should_fail: true
+  - name: "check names the note with the provenance location"
+    command: "zettel check 2>/dev/null | grep 'attention-is-not-explanation' | grep -q '\\[provenance\\]'; test $? -eq 0"
+  - name: "check exits nonzero"
+    command: "zettel check"
+    should_fail: true
+  - name: "the graph commands stay intact"
+    command: "zettel orphans >/dev/null && zettel backlinks attention-is-not-explanation >/dev/null && zettel stats >/dev/null"
