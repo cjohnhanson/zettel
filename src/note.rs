@@ -164,3 +164,60 @@ mod serialize_tests {
         assert_eq!(back_body, body);
     }
 }
+
+/// A note as an interface returns it.
+///
+/// The CLI prints this as JSON, and a server returns it directly. The
+/// shape lives here so both give the same fields, and so a change to it
+/// is one change.
+#[derive(Debug, Serialize)]
+pub struct NoteView {
+    /// The ID the note answers to from the reading vantage: bare when
+    /// local, `alias:id` when it belongs to a dependency store.
+    pub id: String,
+    pub title: String,
+    /// The note's default provenance spec, or null when unknown.
+    pub provenance: Option<String>,
+    pub tags: Vec<String>,
+    pub links: Vec<String>,
+    pub body: String,
+    /// The resolved spans, so a reader can weigh each piece of text by
+    /// its provenance without parsing the body.
+    pub spans: Vec<SpanView>,
+}
+
+/// One resolved span of a note.
+#[derive(Debug, Serialize)]
+pub struct SpanView {
+    pub provenance: String,
+    /// True when the provenance comes from the note default rather than
+    /// an inline marker.
+    pub from_default: bool,
+    pub text: String,
+}
+
+impl Note {
+    /// This note as an interface returns it, under the ID it answers to.
+    pub fn view(&self, qualified_id: &str) -> NoteView {
+        let spans = crate::provenance::resolve_spans_lenient(
+            self.frontmatter.provenance.as_deref(),
+            &self.body,
+        )
+        .iter()
+        .map(|s| SpanView {
+            provenance: crate::provenance::display(s.marker.as_ref()),
+            from_default: s.from_default,
+            text: s.text.clone(),
+        })
+        .collect();
+        NoteView {
+            id: qualified_id.to_string(),
+            title: self.frontmatter.title.clone(),
+            provenance: self.frontmatter.provenance.clone(),
+            tags: self.frontmatter.tags.clone(),
+            links: self.frontmatter.links.clone(),
+            body: self.body.clone(),
+            spans,
+        }
+    }
+}
