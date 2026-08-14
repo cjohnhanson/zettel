@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "command": "gaff hook",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "gaff hook",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "command": "gaff hook",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "gaff hook",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "gaff hook",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

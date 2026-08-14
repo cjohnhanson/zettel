@@ -1,0 +1,11 @@
+#!/bin/sh
+# Drive a served store over stdio with a scripted JSON-RPC session.
+# Each argument after the command is one request line; the initialize
+# handshake is prepended. Prints the responses, one JSON object per
+# line, so an assertion can pick a field out with jq.
+CMD="$1"; shift
+{
+  printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"missouri","version":"1"}}}'
+  printf '%s\n' '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+  for line in "$@"; do printf '%s\n' "$line"; done
+} | $CMD 2>/dev/null

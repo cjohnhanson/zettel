@@ -71,6 +71,9 @@ pub enum Command {
     /// Convert pre-provenance notes (status keys) to the provenance model
     Migrate,
 
+    /// Serve this knowledge base over MCP
+    Serve(ServeArgs),
+
     /// Read the bundled documentation
     Docs(DocsArgs),
 }
@@ -305,6 +308,26 @@ pub struct OrphansArgs {
     /// The output format (text or json)
     #[arg(long, default_value = "text")]
     pub format: OutputFormat,
+}
+
+#[derive(Parser)]
+pub struct ServeArgs {
+    /// The surfaces to offer, separated by commas: resources, tools.
+    /// Tools are the surface every client can call, so a default keeps
+    /// them on.
+    #[arg(long, default_value = "resources,tools")]
+    pub surfaces: String,
+
+    /// What a caller may do: read-only or read-write. A note written
+    /// through the server is recorded as agent-written whichever is set.
+    #[arg(long, default_value = "read-only")]
+    pub access: String,
+
+    /// Where to listen. Omitted, the server speaks on stdin and stdout,
+    /// for a client that starts it. Given, it serves over HTTP for a
+    /// client that connects.
+    #[arg(long)]
+    pub bind: Option<String>,
 }
 
 #[derive(Parser)]
@@ -708,6 +731,17 @@ pub fn run(args: Args) -> crate::Result<()> {
                 std::process::exit(1);
             }
             Ok(())
+        }
+
+        Command::Serve(a) => {
+            Repo::open(&root)?;
+            let config = crate::serve::config_from(
+                root.as_std_path(),
+                &a.surfaces,
+                &a.access,
+                "zettel",
+            )?;
+            crate::serve::run(config, a.bind.as_deref())
         }
 
         Command::Migrate => {
