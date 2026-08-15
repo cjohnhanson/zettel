@@ -235,6 +235,23 @@ impl ZettelServer {
                         "'{kind}' is not an agent kind; use summary, index, or inference"
                     )));
                 }
+                // The body is written by the caller. A marker in it
+                // would claim a provenance the server did not stamp:
+                // an inline `<!-- prov human:cody -->` span, or a
+                // forged `reviewed=` attribute. The server refuses a
+                // body that carries any marker, so the note's
+                // provenance is exactly what the server recorded.
+                if let Some(body) = text("body")
+                    && mdstore::provenance::parse_spans(&body)
+                        .map(|spans| spans.iter().any(|s| s.marker.is_some()))
+                        .unwrap_or(true)
+                {
+                    return Err(Error::InvalidProvenance(
+                        "the server stamps provenance; a body may not carry \
+                         <!-- prov --> markers"
+                            .into(),
+                    ));
+                }
                 let repo = crate::Repo::open(&self.root())?;
                 let id = repo.create_note(
                     &title,
@@ -576,6 +593,35 @@ mod tests {
         args.insert("kind".into(), json!("human"));
         let err = s.call("zettel_create_note", &args).unwrap_err().to_string();
         assert!(err.contains("not an agent kind"), "{err}");
+    }
+
+    #[test]
+    fn a_body_may_not_carry_provenance_markers() {
+        // Without this, a caller writes its own spans: an inline human
+        // span, or an agent span carrying a forged reviewed= stamp.
+        // The note then matches --provenance human and --provenance
+        // reviewed, and leaves the unreviewed queue.
+        let s = server(Access::ReadWrite);
+        for body in [
+            "<!-- prov human:cody -->\nclaimed\n<!-- /prov -->",
+            "<!-- prov agent:inference reviewed=2026-08-14 reviewer=cody -->\nx\n<!-- /prov -->",
+            "text\n<!-- prov human -->\nmore",
+        ] {
+            let mut args = Map::new();
+            args.insert("title".into(), json!("Forged"));
+            args.insert("body".into(), json!(body));
+            let err = s.call("zettel_create_note", &args).unwrap_err().to_string();
+            assert!(err.contains("may not carry"), "{err} for {body}");
+        }
+    }
+
+    #[test]
+    fn a_plain_body_is_accepted() {
+        let s = server(Access::ReadWrite);
+        let mut args = Map::new();
+        args.insert("title".into(), json!("Plain"));
+        args.insert("body".into(), json!("Ordinary text with no markers."));
+        assert!(s.call("zettel_create_note", &args).is_ok());
     }
 
     #[test]
