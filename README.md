@@ -59,7 +59,6 @@ Each note is one markdown file with YAML frontmatter:
 
 ```markdown
 ---
-id: a3f2
 title: Connection pooling causes stale reads
 tags: [bug, postgres]
 links: [b7c1]
@@ -78,7 +77,8 @@ Confirmed with the infra team.
 <!-- /prov -->
 ```
 
-Zettel keeps the notes in one flat `.zettel/` directory:
+The note ID is the filename stem, so the frontmatter does not repeat
+it. Zettel keeps the notes in one flat `.zettel/` directory:
 
 ```
 .zettel/

@@ -168,6 +168,14 @@ impl ZettelServer {
         match name {
             "zettel_list_notes" => {
                 let repo = crate::Repo::open(&self.root())?;
+                // A file the loader skipped is absent from this list,
+                // and over the wire the absence looks like a store that
+                // simply does not hold it. The CLI prints a warning; a
+                // client needs the same fact in the payload.
+                let skipped: Vec<String> = self
+                    .workspace()
+                    .map(|ws| ws.skipped().to_vec())
+                    .unwrap_or_default();
                 let notes = repo.list_notes(&crate::ListNotesFilter {
                     tag: text("tag")?.as_deref(),
                     provenance: text("provenance")?.as_deref(),
@@ -184,7 +192,10 @@ impl ZettelServer {
                         })
                     })
                     .collect();
-                Ok(pretty(&listed))
+                Ok(pretty(&json!({
+                    "notes": listed,
+                    "skipped": skipped,
+                })))
             }
             "zettel_read_note" => {
                 let id = required("id")?;
