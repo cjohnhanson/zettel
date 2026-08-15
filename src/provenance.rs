@@ -39,6 +39,23 @@ pub fn parse_spec(spec: &str) -> Result<Marker> {
     Ok(marker)
 }
 
+/// Parse a spec a person supplied, and refuse a review stamp in it.
+///
+/// A stamp records that a human read the text and approved it. Only
+/// `note review --approve` writes one. Accepting one here would let a
+/// caller declare its own content reviewed without anybody reviewing
+/// it, which is the one claim the whole model rests on.
+pub fn parse_authored_spec(spec: &str) -> Result<Marker> {
+    let marker = parse_spec(spec)?;
+    if marker.attr(ATTR_REVIEWED).is_some() || marker.attr(ATTR_REVIEWER).is_some() {
+        return Err(Error::InvalidProvenance(
+            "a review stamp comes from 'note review --approve', not from a written spec"
+                .into(),
+        ));
+    }
+    Ok(marker)
+}
+
 /// Validate a parsed marker against the vocabulary.
 pub fn validate_marker(marker: &Marker) -> Result<()> {
     match marker.origin.as_str() {
