@@ -34,7 +34,7 @@ Create a note. Zettel prints the new note ID to stdout.
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--tags <csv>` | `-t` | | The tags; separate them with commas |
+| `--tag <csv>` | `-t` | | The tags; separate them with commas |
 | `--links <csv>` | `-l` | | The note IDs to link to; separate them with commas |
 | `--body <text>` | `-b` | | The note body text |
 | `--provenance <spec>` | `-p` | | The default provenance: `origin[:qualifier]`, for example `human:cody`, `agent:summary`, `citation:ab12`. Omitted means unknown |
@@ -75,7 +75,7 @@ Edit a note. Zettel changes only the fields you give.
 |--------|-------|-------------|
 | `--title <text>` | | Replace the title |
 | `--provenance <spec>` | `-p` | Set the default provenance: `origin[:qualifier]` |
-| `--tags <csv>` | `-t` | Replace all tags; separate them with commas |
+| `--tag <csv>` | `-t` | Replace all tags; separate them with commas |
 | `--add-tag <tag>` | | Add one tag and keep the existing tags |
 | `--remove-tag <tag>` | | Remove one tag and keep the other tags |
 | `--links <csv>` | `-l` | Replace all links; separate them with commas |

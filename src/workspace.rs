@@ -566,12 +566,21 @@ impl Workspace {
             .collect();
         most_connected.sort_by_key(|(_, _, count)| std::cmp::Reverse(*count));
 
+        // An orphan is a note the whole closure points at from
+        // nowhere, so the count covers the closure. The note count
+        // above covers this store. Report both rather than pair two
+        // scopes silently.
+        let orphans = self.orphans();
+        let local_orphans = orphans.iter().filter(|v| !v.qualified.contains(':')).count();
+
         crate::Stats {
             total,
             span_counts,
             tag_counts,
             most_connected: most_connected.into_iter().take(5).collect(),
-            orphan_count: self.orphans().len(),
+            orphan_count: orphans.len(),
+            local_orphan_count: local_orphans,
+            has_dependencies: self.snapshot.graph.members.len() > 1,
         }
     }
 
