@@ -51,6 +51,14 @@ use serde::Serialize;
 pub struct Repo {
     pub root: Utf8PathBuf,
     pub config: ZettelConfig,
+    /// The note directory, already checked against the store root.
+    ///
+    /// The loader guarded this and the Repo did not, so the two layers
+    /// disagreed about which directory this store holds. A
+    /// `zettel_dir` that climbed out then let the CLI read and write
+    /// another store's notes under bare, unqualified ids, while the
+    /// commands built on the loader reported an empty store.
+    notes_dir: Utf8PathBuf,
 }
 
 impl Repo {
@@ -61,14 +69,23 @@ impl Repo {
         }
         let content = std::fs::read_to_string(&config_path)?;
         let config: ZettelConfig = yaml_serde::from_str(&content)?;
+        // Resolve the directory once, here, through the one function
+        // that decides containment. An accessor that joined the raw
+        // configured value gave every caller an unguarded path.
+        let notes_dir =
+            mdstore::store::document_dir(root.as_std_path(), &config.zettel_dir)
+                .map_err(crate::provenance::from_mdstore)?;
+        let notes_dir = Utf8PathBuf::try_from(notes_dir)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         Ok(Repo {
             root: root.to_owned(),
             config,
+            notes_dir,
         })
     }
 
     pub fn zettel_dir(&self) -> Utf8PathBuf {
-        self.root.join(&self.config.zettel_dir)
+        self.notes_dir.clone()
     }
 
     // -- Init --
@@ -134,8 +151,7 @@ impl Repo {
             let entry = entry?;
             let path = Utf8PathBuf::try_from(entry.path())
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md")
-                && mdstore::store::is_regular_file(path.as_std_path())
+            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
             {
                 let stem = path.file_stem().unwrap_or("");
                 if stem.starts_with(prefix_dash) && !out.contains(&stem.to_string()) {
@@ -154,8 +170,7 @@ impl Repo {
             let entry = entry?;
             let path = Utf8PathBuf::try_from(entry.path())
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md")
-                && mdstore::store::is_regular_file(path.as_std_path())
+            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
             {
                 let stem = path.file_stem().unwrap_or("");
                 if let Some((_, file_slug)) = extract_prefix(stem)
@@ -179,8 +194,7 @@ impl Repo {
             let entry = entry?;
             let path = Utf8PathBuf::try_from(entry.path())
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md")
-                && mdstore::store::is_regular_file(path.as_std_path())
+            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
             {
                 let stem = path.file_stem().unwrap_or("");
                 if let Some((prefix, _)) = extract_prefix(stem)
@@ -202,8 +216,7 @@ impl Repo {
             let entry = entry?;
             let path = Utf8PathBuf::try_from(entry.path())
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md")
-                && mdstore::store::is_regular_file(path.as_std_path())
+            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
             {
                 let stem = path.file_stem().unwrap_or("");
                 if let Some((_, file_slug)) = extract_prefix(stem) {
@@ -272,8 +285,7 @@ impl Repo {
             let entry = entry?;
             let path = Utf8PathBuf::try_from(entry.path())
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md")
-                && mdstore::store::is_regular_file(path.as_std_path())
+            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
             {
                 let id = path.file_stem().unwrap_or("").to_string();
                 // One unreadable file must not take down a repo-wide
@@ -568,7 +580,11 @@ impl Repo {
                     // Also check the body for [[ref]] links
                     for other in &all_notes {
                         if !collected.contains(&other.id)
-                            && body_contains_link(&n.body, &other.id, extract_prefix(&other.id).map(|(p, _)| p))
+                            && body_contains_link(
+                                &n.body,
+                                &other.id,
+                                extract_prefix(&other.id).map(|(p, _)| p),
+                            )
                         {
                             collected.push(other.id.clone());
                             next_frontier.push(other.id.clone());
@@ -638,8 +654,7 @@ impl Repo {
     /// commands that degrade a bad note to unknown.
     pub fn note_spans(&self, id: &str) -> Result<(Note, Vec<crate::provenance::ResolvedSpan>)> {
         let n = self.find_note(id)?;
-        let spans =
-            crate::provenance::resolve_spans(n.frontmatter.provenance.as_deref(), &n.body)?;
+        let spans = crate::provenance::resolve_spans(n.frontmatter.provenance.as_deref(), &n.body)?;
         Ok((n, spans))
     }
 
@@ -662,8 +677,8 @@ impl Repo {
             .map_err(crate::provenance::from_mdstore)?;
         let (mut fm, body) = note::parse_note(&content)?;
 
-        let mut raw = mdstore::provenance::parse_spans(&body)
-            .map_err(crate::provenance::from_mdstore)?;
+        let mut raw =
+            mdstore::provenance::parse_spans(&body).map_err(crate::provenance::from_mdstore)?;
         // The review command validates like the listing does: an invalid
         // marker never gets approved.
         for span in &raw {
@@ -699,8 +714,8 @@ impl Repo {
                         return Err(Error::SpanNotFound(i));
                     }
                     let effective = span.marker.as_ref().or(default.as_ref());
-                    let agent = effective
-                        .is_some_and(|m| m.origin == crate::provenance::ORIGIN_AGENT);
+                    let agent =
+                        effective.is_some_and(|m| m.origin == crate::provenance::ORIGIN_AGENT);
                     if !agent {
                         return Err(Error::SpanNotAgent(i));
                     }
@@ -817,8 +832,7 @@ impl Repo {
             let entry = entry?;
             let path = Utf8PathBuf::try_from(entry.path())
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md")
-                && mdstore::store::is_regular_file(path.as_std_path())
+            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
             {
                 paths.push(path);
             }
@@ -827,7 +841,7 @@ impl Repo {
         for path in paths {
             let id = path.file_stem().unwrap_or("").to_string();
             let content = mdstore::store::read_document(path.as_std_path())
-            .map_err(crate::provenance::from_mdstore)?;
+                .map_err(crate::provenance::from_mdstore)?;
             let (mut fm, body) = note::parse_note(&content)?;
             let Some(status) = fm.extra.remove(&status_key) else {
                 continue;
@@ -838,11 +852,8 @@ impl Repo {
             } else {
                 MigrateAction::RemovedStatus
             };
-            mdstore::store::write_document(
-                path.as_std_path(),
-                &note::serialize_note(&fm, &body),
-            )
-            .map_err(crate::provenance::from_mdstore)?;
+            mdstore::store::write_document(path.as_std_path(), &note::serialize_note(&fm, &body))
+                .map_err(crate::provenance::from_mdstore)?;
             changes.push((id, action));
         }
         Ok(changes)
