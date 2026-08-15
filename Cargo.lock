@@ -743,7 +743,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 [[package]]
 name = "mdstore"
 version = "0.2.0"
-source = "git+https://github.com/cjohnhanson/mdstore?rev=b458808#b458808fe0551ad494c3eb62d49df198a7adfa0c"
+source = "git+https://github.com/cjohnhanson/mdstore?rev=36f13b6#36f13b6ded7831084323fe8275f8f1576e6041b7"
 dependencies = [
  "rand",
  "serde",

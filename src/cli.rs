@@ -905,11 +905,25 @@ fn print_partial(ws: &crate::workspace::Workspace) {
 
 /// Findings that only the store layer can see.
 /// The first line of a span, shortened for the review listing.
+/// One line of a span, and how much of it the line leaves out.
+///
+/// Approving a span approves all of it. A preview that shows the first
+/// line and says nothing about the rest invites a reader to approve
+/// text they have not seen, so the count of what is hidden is part of
+/// the preview.
 fn span_excerpt(text: &str) -> String {
     let first = text.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
     let mut excerpt: String = first.trim().chars().take(60).collect();
     if first.trim().chars().count() > 60 {
         excerpt.push('…');
+    }
+    let hidden = text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .count()
+        .saturating_sub(1);
+    if hidden > 0 {
+        excerpt.push_str(&format!("  (+{hidden} more line(s))"));
     }
     excerpt
 }

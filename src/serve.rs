@@ -142,7 +142,16 @@ impl ZettelServer {
     }
 
     fn call(&self, name: &str, args: &Map<String, Value>) -> Result<String> {
-        let text = |key: &str| args.get(key).and_then(Value::as_str).map(str::to_string);
+        // An optional argument of the wrong type was dropped, so a
+        // filtered query came back unfiltered and marked as success.
+        // Absent is fine; wrong is an error.
+        let text = |key: &str| -> Result<Option<String>> {
+            match args.get(key) {
+                None | Some(Value::Null) => Ok(None),
+                Some(Value::String(v)) => Ok(Some(v.clone())),
+                Some(_) => Err(Error::InvalidProvenance(format!("'{key}' must be a string"))),
+            }
+        };
         // A missing or mistyped argument is not a note that could not
         // be found, and reporting it that way sent the caller looking
         // for the wrong problem.
@@ -160,8 +169,8 @@ impl ZettelServer {
             "zettel_list_notes" => {
                 let repo = crate::Repo::open(&self.root())?;
                 let notes = repo.list_notes(&crate::ListNotesFilter {
-                    tag: text("tag").as_deref(),
-                    provenance: text("provenance").as_deref(),
+                    tag: text("tag")?.as_deref(),
+                    provenance: text("provenance")?.as_deref(),
                     unreviewed: false,
                 })?;
                 let listed: Vec<Value> = notes
@@ -247,7 +256,14 @@ impl ZettelServer {
                     .iter()
                     .map(|v| json!({ "id": v.qualified, "title": v.note.frontmatter.title }))
                     .collect();
-                Ok(pretty(&views))
+                // A graph answer over an incomplete closure is wrong,
+                // not approximate, and the CLI says so on stderr. A
+                // client that sees only the array cannot tell a note
+                // with no backlinks from a store it could not read.
+                Ok(pretty(&json!({
+                    "backlinks": views,
+                    "unreachable": ws.missing(),
+                })))
             }
             "zettel_create_note" => {
                 self.config
@@ -257,7 +273,7 @@ impl ZettelServer {
                 // The server stamps the provenance. A caller cannot ask
                 // for `human`, and cannot omit it: this note was
                 // written by an agent, and the store should say so.
-                let kind = text("kind").unwrap_or_else(|| "summary".to_string());
+                let kind = text("kind")?.unwrap_or_else(|| "summary".to_string());
                 if !crate::provenance::AGENT_KINDS.contains(&kind.as_str()) {
                     return Err(Error::InvalidProvenance(format!(
                         "'{kind}' is not an agent kind; use summary, index, or inference"
@@ -269,7 +285,7 @@ impl ZettelServer {
                 // forged `reviewed=` attribute. The server refuses a
                 // body that carries any marker, so the note's
                 // provenance is exactly what the server recorded.
-                if let Some(body) = text("body")
+                if let Some(body) = text("body")?
                     && mdstore::provenance::parse_spans(&body)
                         .map(|spans| spans.iter().any(|s| s.marker.is_some()))
                         .unwrap_or(true)
@@ -284,9 +300,9 @@ impl ZettelServer {
                 let id = repo.create_note(
                     &title,
                     crate::CreateNoteOptions {
-                        tags: text("tags"),
+                        tags: text("tags")?,
                         links: None,
-                        body: text("body"),
+                        body: text("body")?,
                         provenance: Some(format!("agent:{kind}")),
                     },
                 )?;
@@ -493,6 +509,34 @@ async fn serve_stdio(config: ServeConfig) -> Result<()> {
     Ok(())
 }
 
+/// Refuse a request a web page made.
+///
+/// A page on the open web can post to a server on this machine, and
+/// the name it used may resolve here after the page loaded. The reply
+/// stays inside the browser only if the server refuses the request,
+/// and a served store has no authentication to fall back on.
+///
+/// A request with no `Origin` header is not a browser request, so a
+/// client that sends none is left alone.
+async fn refuse_foreign_origin(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::response::IntoResponse as _;
+
+    if let Some(origin) = request.headers().get(axum::http::header::ORIGIN)
+        && let Ok(text) = origin.to_str()
+        && !mdstore::mcp::origin_is_local(text)
+    {
+        return (
+            axum::http::StatusCode::FORBIDDEN,
+            "this server answers only a client on this machine",
+        )
+            .into_response();
+    }
+    next.run(request).await
+}
+
 async fn serve_http(config: ServeConfig, addr: &str) -> Result<()> {
     use rmcp::transport::streamable_http_server::{
         StreamableHttpService, session::local::LocalSessionManager,
@@ -505,13 +549,23 @@ async fn serve_http(config: ServeConfig, addr: &str) -> Result<()> {
         LocalSessionManager::default().into(),
         rmcp::transport::streamable_http_server::StreamableHttpServerConfig::default(),
     );
-    let router = axum::Router::new().nest_service("/mcp", service);
+    let router = axum::Router::new()
+        .nest_service("/mcp", service)
+        .layer(axum::middleware::from_fn(refuse_foreign_origin));
     let listener = tokio::net::TcpListener::bind(addr).await.map_err(Error::Io)?;
     let bound = listener.local_addr().map_err(Error::Io)?;
     eprintln!(
         "zettel serving on http://{bound}/mcp ({})",
         if read_only { "read-only" } else { "read-write" }
     );
+    // A served store has no authentication, so the operator must know
+    // when it is reachable from more than this machine.
+    if !mdstore::mcp::addr_is_loopback(&bound.to_string()) {
+        eprintln!(
+            "warning: {bound} is not a loopback address, and a served store authenticates nobody. \
+             Put an authenticating proxy in front of it, or bind 127.0.0.1."
+        );
+    }
     axum::serve(listener, router)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
