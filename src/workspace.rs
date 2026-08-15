@@ -166,6 +166,11 @@ pub struct StoreRow {
     pub remote: bool,
     /// The time since the last fetch, for a remote store.
     pub age: Option<String>,
+    /// The local checkout the registry bound this source to, if any.
+    ///
+    /// A row that shows a pinned revision while a working tree answers
+    /// for it states something that is not true of any other machine.
+    pub override_path: Option<String>,
 }
 
 /// A note as seen from a vantage: the note plus where it lives.
@@ -422,6 +427,15 @@ impl Workspace {
                 },
                 notes: self.snapshot.member_documents(i).count(),
                 unavailable: m.unavailable.clone(),
+                override_path: match &m.source {
+                    mdstore::StoreSource::Git { url, .. } | mdstore::StoreSource::Blob { url } => {
+                        self.redirected
+                            .iter()
+                            .find(|(u, _)| u == url)
+                            .map(|(_, p)| p.clone())
+                    }
+                    mdstore::StoreSource::Path(_) => None,
+                },
             })
             .collect()
     }

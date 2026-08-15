@@ -221,10 +221,14 @@ stores:
 ```
 
 The registry changes where a dependency resolves. It does not change
-what a store declares, so it cannot make one machine's links differ from
-another's. A reference that resolves only through the checkout, such as
-a reference to a note that was never committed, is a `check` finding:
-that reference works here and nowhere else.
+what a store declares.
+
+It does change what a command reads. The checkout answers for the
+declared source, including for a pinned revision, so a command can read
+a note that is only in that working tree. `zettel store list` marks a
+row the registry bound, and `zettel check` reports a reference that
+resolves only through the checkout: that reference works here and
+nowhere else.
 
 A command reads all the declared stores. A command writes only to this
 store. A note in a dependency has the ID `alias:id`. A note in a

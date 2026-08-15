@@ -704,7 +704,17 @@ pub fn run(args: Args) -> crate::Result<()> {
                                     (true, None) => "  synced (age unknown)".to_string(),
                                     _ => String::new(),
                                 };
-                                println!("{label}  {}  {state}{age}", m.source);
+                                // A registry override answers for the
+                                // declared source, so the row that
+                                // prints the pin must say what it is
+                                // really reading.
+                                let bound = match &m.override_path {
+                                    Some(path) => {
+                                        format!("  (registry override: {path}; the pin is bypassed)")
+                                    }
+                                    None => String::new(),
+                                };
+                                println!("{label}  {}  {state}{age}{bound}", m.source);
                             }
                         }
                     }
