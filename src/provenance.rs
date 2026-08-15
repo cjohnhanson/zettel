@@ -58,6 +58,41 @@ pub fn parse_authored_spec(spec: &str) -> Result<Marker> {
     Ok(marker)
 }
 
+/// Refuse a review stamp written into caller-supplied body text.
+///
+/// `parse_authored_spec` guards the frontmatter spec. A marker in the
+/// body reaches the same place by another route: text that carries
+/// `reviewed=` matches `read --provenance reviewed` and counts as
+/// approved in `stats`, without anybody approving it. Only
+/// `note review --approve` writes a stamp.
+///
+/// This checks the caller's text only. A body already on disk may hold
+/// stamps that `approve_spans` wrote, and re-checking the merged body
+/// would fail every later edit of an approved note.
+pub fn refuse_authored_stamps(text: &str) -> Result<()> {
+    // Read every marker the text holds, not only the ones that open a
+    // span. A marker written inline is inert to the reader of the
+    // graph and still legible to the person reading the file, so a
+    // stamp there claims an approval nobody gave.
+    let mut rest = text;
+    while let Some(start) = rest.find("<!-- prov") {
+        let after = &rest[start + "<!-- prov".len()..];
+        let Some(end) = after.find("-->") else { break };
+        let spec = after[..end].trim();
+        if !spec.is_empty()
+            && let Ok(marker) = mdstore::provenance::Marker::parse(spec)
+            && (marker.attr(ATTR_REVIEWED).is_some() || marker.attr(ATTR_REVIEWER).is_some())
+        {
+            return Err(Error::InvalidProvenance(
+                "a review stamp comes from 'note review --approve', not from a written marker"
+                    .into(),
+            ));
+        }
+        rest = &after[end + 3..];
+    }
+    Ok(())
+}
+
 /// Validate a parsed marker against the vocabulary.
 pub fn validate_marker(marker: &Marker) -> Result<()> {
     match marker.origin.as_str() {
