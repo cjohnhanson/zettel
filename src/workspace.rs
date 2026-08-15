@@ -50,7 +50,17 @@ impl DocumentSource for NoteSource {
 
         let mut notes = Vec::new();
         for entry in scan.entries {
-            let text = content.read(&entry.path.to_string_lossy())?;
+            // One unreadable note never takes down a store either. A
+            // bare `?` here is caught one level up, where the whole
+            // member becomes an empty document list, so a single
+            // non-UTF-8 byte silently emptied the store.
+            let text = match content.read(&entry.path.to_string_lossy()) {
+                Ok(t) => t,
+                Err(e) => {
+                    skipped.push(format!("{} ({e})", entry.path.display()));
+                    continue;
+                }
+            };
             // One unparseable note never takes down a store.
             match note::parse_note(&text) {
                 Ok((frontmatter, body)) => notes.push(Entry {
