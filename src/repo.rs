@@ -477,92 +477,6 @@ impl Repo {
             .collect()
     }
 
-    /// Find all notes that link to the given note. The link is a full ID or a
-    /// prefix.
-    pub fn backlinks(&self, id: &str) -> Result<Vec<Backlink>> {
-        let resolved = self.resolve_id(id)?;
-        let prefix = extract_prefix(&resolved).map(|(p, _)| p.to_string());
-
-        let all_notes = self.list_notes(&ListNotesFilter::default())?;
-        let mut results = Vec::new();
-
-        for n in &all_notes {
-            if n.id == resolved {
-                continue;
-            }
-
-            let links_to_target = n.frontmatter.links.iter().any(|link| {
-                link == &resolved
-                    || prefix
-                        .as_ref()
-                        .is_some_and(|p| link == p)
-                    || self.resolve_id(link).ok().as_deref() == Some(&resolved)
-            });
-
-            // Also check the body for [[id]] references
-            let body_links = body_contains_link(&n.body, &resolved, prefix.as_deref());
-
-            // A citation of a note is a graph edge too.
-            let cites_target = self.resolved_citations(n).iter().any(|c| c == &resolved);
-
-            if links_to_target || body_links || cites_target {
-                results.push(Backlink {
-                    id: n.id.clone(),
-                    title: n.frontmatter.title.clone(),
-                });
-            }
-        }
-
-        Ok(results)
-    }
-
-    /// Find the notes with no incoming links and no outgoing links.
-    pub fn orphans(&self) -> Result<Vec<Note>> {
-        let all_notes = self.list_notes(&ListNotesFilter::default())?;
-        let all_ids: Vec<&str> = all_notes.iter().map(|n| n.id.as_str()).collect();
-
-        let mut orphans = Vec::new();
-        for n in &all_notes {
-            let has_outgoing =
-                !n.frontmatter.links.is_empty() || !self.resolved_citations(n).is_empty();
-            let has_incoming = all_notes.iter().any(|other| {
-                other.id != n.id
-                    && (other.frontmatter.links.iter().any(|l| {
-                        l == &n.id
-                            || extract_prefix(&n.id)
-                                .map(|(p, _)| p)
-                                .is_some_and(|p| l == p)
-                            || self.resolve_id(l).ok().as_deref() == Some(n.id.as_str())
-                    }) || body_contains_link(
-                        &other.body,
-                        &n.id,
-                        extract_prefix(&n.id).map(|(p, _)| p),
-                    ) || self.resolved_citations(other).contains(&n.id))
-            });
-            let has_body_outgoing = all_ids
-                .iter()
-                .any(|other_id| *other_id != n.id && body_contains_link(&n.body, other_id, extract_prefix(other_id).map(|(p, _)| p)));
-
-            if !has_outgoing && !has_incoming && !has_body_outgoing {
-                orphans.push(Note {
-                    id: n.id.clone(),
-                    frontmatter: NoteFrontmatter {
-                        title: n.frontmatter.title.clone(),
-                        provenance: n.frontmatter.provenance.clone(),
-                        tags: n.frontmatter.tags.clone(),
-                        links: n.frontmatter.links.clone(),
-                        created: n.frontmatter.created.clone(),
-                        updated: n.frontmatter.updated.clone(),
-                        extra: n.frontmatter.extra.clone(),
-                    },
-                    body: n.body.clone(),
-                });
-            }
-        }
-
-        Ok(orphans)
-    }
-
     // -- Search --
 
     /// The longest pattern a caller may send.
@@ -715,115 +629,7 @@ impl Repo {
 
     // -- Stats --
 
-    pub fn stats(&self) -> Result<Stats> {
-        let all_notes = self.list_notes(&ListNotesFilter::default())?;
-
-        let total = all_notes.len();
-
-        // Span counts by origin, across all notes
-        let mut span_counts = SpanCounts::default();
-        for n in &all_notes {
-            let spans = crate::provenance::resolve_spans_lenient(
-                n.frontmatter.provenance.as_deref(),
-                &n.body,
-            );
-            for s in &spans {
-                match s.marker.as_ref().map(|m| m.origin.as_str()) {
-                    Some(crate::provenance::ORIGIN_HUMAN) => span_counts.human += 1,
-                    Some(crate::provenance::ORIGIN_AGENT) => span_counts.agent += 1,
-                    Some(crate::provenance::ORIGIN_CITATION) => span_counts.citation += 1,
-                    _ => span_counts.unknown += 1,
-                }
-                if crate::provenance::is_unreviewed_agent(s.marker.as_ref()) {
-                    span_counts.unreviewed_agent += 1;
-                }
-            }
-        }
-
-        // Tag frequency
-        let mut tag_counts: Vec<(String, usize)> = Vec::new();
-        for n in &all_notes {
-            for tag in &n.frontmatter.tags {
-                if let Some(entry) = tag_counts.iter_mut().find(|(t, _)| t == tag) {
-                    entry.1 += 1;
-                } else {
-                    tag_counts.push((tag.clone(), 1));
-                }
-            }
-        }
-        tag_counts.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
-
-        // The most connected notes, by backlink count
-        let mut backlink_counts: Vec<(String, String, usize)> = Vec::new();
-        for n in &all_notes {
-            let count = self.backlinks(&n.id)?.len();
-            backlink_counts.push((n.id.clone(), n.frontmatter.title.clone(), count));
-        }
-        backlink_counts.sort_by_key(|(_, _, count)| std::cmp::Reverse(*count));
-
-        let orphan_count = self.orphans()?.len();
-
-        Ok(Stats {
-            total,
-            span_counts,
-            tag_counts,
-            most_connected: backlink_counts.into_iter().take(5).collect(),
-            orphan_count,
-        })
-    }
-
     // -- Check (broken links) --
-
-    pub fn check(&self) -> Result<Vec<BrokenLink>> {
-        let mut broken = Vec::new();
-
-        // Name the files that list_notes skips: the diagnostic command
-        // must survive the corruption it diagnoses.
-        let dir = self.zettel_dir();
-        if dir.exists() {
-            for entry in std::fs::read_dir(&dir)? {
-                let entry = entry?;
-                let path = Utf8PathBuf::try_from(entry.path())
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-                if path.extension() == Some("md")
-                && mdstore::store::is_regular_file(path.as_std_path())
-            {
-                    let content = mdstore::store::read_document(path.as_std_path())
-                    .map_err(crate::provenance::from_mdstore)?;
-                    if let Err(e) = note::parse_note(&content) {
-                        broken.push(BrokenLink {
-                            source_id: path.file_stem().unwrap_or("").to_string(),
-                            source_title: "unparseable".to_string(),
-                            target: e.to_string(),
-                            location: "frontmatter".to_string(),
-                        });
-                    }
-                }
-            }
-        }
-
-        let all_notes = self.list_notes(&ListNotesFilter::default())?;
-
-        // Link resolution lives in the workspace, which knows the store
-        // closure; checking it here too would report a working
-        // cross-store link as broken.
-        for n in &all_notes {
-            // Check the provenance vocabulary. The repo-wide commands
-            // degrade a bad note to unknown; this is where it gets named.
-            if let Err(e) =
-                crate::provenance::resolve_spans(n.frontmatter.provenance.as_deref(), &n.body)
-            {
-                broken.push(BrokenLink {
-                    source_id: n.id.clone(),
-                    source_title: n.frontmatter.title.clone(),
-                    target: e.to_string(),
-                    location: "provenance".to_string(),
-                });
-            }
-        }
-
-        Ok(broken)
-    }
 
     // -- Provenance review --
 
@@ -1092,7 +898,14 @@ pub struct Stats {
     pub span_counts: SpanCounts,
     pub tag_counts: Vec<(String, usize)>,
     pub most_connected: Vec<(String, String, usize)>,
+    /// Orphans across the whole closure, which is what the graph
+    /// computes. The note count above covers this store only, so the
+    /// two are different scopes and the output says which.
     pub orphan_count: usize,
+    /// Orphans that live in this store.
+    pub local_orphan_count: usize,
+    /// True when the closure holds more than this store.
+    pub has_dependencies: bool,
 }
 
 /// Body span counts by origin, across the whole knowledge base.

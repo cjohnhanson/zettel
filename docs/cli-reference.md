@@ -34,7 +34,7 @@ Create a note. Zettel prints the new note ID to stdout.
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--tags <csv>` | `-t` | | The tags; separate them with commas |
+| `--tag <csv>` | `-t` | | The tags; separate them with commas |
 | `--links <csv>` | `-l` | | The note IDs to link to; separate them with commas |
 | `--body <text>` | `-b` | | The note body text |
 | `--provenance <spec>` | `-p` | | The default provenance: `origin[:qualifier]`, for example `human:cody`, `agent:summary`, `citation:ab12`. Omitted means unknown |
@@ -75,7 +75,7 @@ Edit a note. Zettel changes only the fields you give.
 |--------|-------|-------------|
 | `--title <text>` | | Replace the title |
 | `--provenance <spec>` | `-p` | Set the default provenance: `origin[:qualifier]` |
-| `--tags <csv>` | `-t` | Replace all tags; separate them with commas |
+| `--tag <csv>` | `-t` | Replace all tags; separate them with commas |
 | `--add-tag <tag>` | | Add one tag and keep the existing tags |
 | `--remove-tag <tag>` | | Remove one tag and keep the other tags |
 | `--links <csv>` | `-l` | Replace all links; separate them with commas |
@@ -221,10 +221,14 @@ stores:
 ```
 
 The registry changes where a dependency resolves. It does not change
-what a store declares, so it cannot make one machine's links differ from
-another's. A reference that resolves only through the checkout, such as
-a reference to a note that was never committed, is a `check` finding:
-that reference works here and nowhere else.
+what a store declares.
+
+It does change what a command reads. The checkout answers for the
+declared source, including for a pinned revision, so a command can read
+a note that is only in that working tree. `zettel store list` marks a
+row the registry bound, and `zettel check` reports a reference that
+resolves only through the checkout: that reference works here and
+nowhere else.
 
 A command reads all the declared stores. A command writes only to this
 store. A note in a dependency has the ID `alias:id`. A note in a
