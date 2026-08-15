@@ -230,7 +230,7 @@ impl Repo {
 
         let mut fm = note::new_frontmatter(title);
         if let Some(spec) = opts.provenance {
-            crate::provenance::parse_spec(&spec)?;
+            crate::provenance::parse_authored_spec(&spec)?;
             fm.provenance = Some(spec);
         }
         if let Some(t) = opts.tags {
@@ -339,7 +339,7 @@ impl Repo {
         }
 
         if let Some(spec) = opts.provenance {
-            let mut new_marker = crate::provenance::parse_spec(spec)?;
+            let mut new_marker = crate::provenance::parse_authored_spec(spec)?;
             // The same origin and qualifier keep the existing attrs (a
             // review stamp survives a no-op re-set); a different origin
             // or qualifier drops them, because the review no longer

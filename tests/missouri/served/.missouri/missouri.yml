@@ -62,3 +62,15 @@ assertions:
   - name: "the human clears the queue at the command line"
     command: "zettel note review served-note --approve all --reviewer cody >/dev/null && zettel note list --unreviewed | grep -q 'Served note'"
     should_fail: true
+
+  # A body written through the server may not carry markers: a marker
+  # would claim a provenance the server did not stamp.
+  - name: "a served body may not carry a human marker"
+    command: "mcp 'zettel serve --access read-write' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"zettel_create_note\",\"arguments\":{\"title\":\"Forged\",\"body\":\"<!-- prov human:cody -->\\nclaimed\\n<!-- /prov -->\"}}}' | jq -r 'select(.id==2) | .result.content[0].text' | grep -q 'may not carry'"
+  - name: "a served body may not carry a forged review stamp"
+    command: "mcp 'zettel serve --access read-write' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"zettel_create_note\",\"arguments\":{\"title\":\"Stamped\",\"body\":\"<!-- prov agent:inference reviewed=2026-01-01 -->\\nx\\n<!-- /prov -->\"}}}' | jq -r 'select(.id==2) | .result.content[0].text' | grep -q 'may not carry'"
+  - name: "neither forged note was written"
+    command: "zettel note list | grep -qE 'Forged|Stamped'"
+    should_fail: true
+  - name: "a plain body is still accepted"
+    command: "mcp 'zettel serve --access read-write' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"zettel_create_note\",\"arguments\":{\"title\":\"Plain served\",\"body\":\"Ordinary text.\"}}}' | jq -r 'select(.id==2) | .result.content[0].text' | grep -q 'agent:summary'"
