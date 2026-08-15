@@ -269,3 +269,44 @@ zettel docs list               Do the same as bare `zettel docs`
 zettel docs <identifier>       Print a doc by slug, title, or unique prefix
 zettel docs search <query>     Search all docs
 ```
+---
+
+## `zettel serve`
+
+Serve this knowledge base over the Model Context Protocol.
+
+```
+zettel serve                        Speak MCP on stdin and stdout
+zettel serve --root <DIR>           Serve the store at DIR (default: .)
+zettel serve --bind <ADDR>          Serve over HTTP at ADDR instead
+zettel serve --surfaces <LIST>      Offer these surfaces (default: resources,tools)
+zettel serve --access <MODE>        read-only (default) or read-write
+```
+
+Omit `--bind`, and the server speaks on stdin and stdout, for a client
+that starts the process. Give `--bind`, and it serves over HTTP, for a
+client that connects to it. The endpoint is `/mcp` on the bound
+address, so `--bind 127.0.0.1:7431` serves at
+`http://127.0.0.1:7431/mcp`.
+
+`--surfaces` takes `resources`, `tools`, or both, separated by commas.
+The protocol cannot negotiate which of these a client understands, so
+the choice is configuration. Tools are the surface every client can
+call, so the default keeps them on.
+
+`--access read-write` adds note creation. The server stamps a note it
+writes as agent-written, whichever access mode is set. It refuses any
+other provenance, and it never exposes approval. Only
+`zettel note review --approve` writes a `reviewed=` stamp.
+
+### Authentication
+
+A served store has none. The server answers whoever opens the
+connection.
+
+This is deliberate. Authentication belongs in front of the server, in
+something built for it: a reverse proxy that terminates TLS and checks
+a token or an identity provider.
+
+Bind to `127.0.0.1` for a client on this machine. To serve anybody
+else, put the server behind a proxy that authenticates.
