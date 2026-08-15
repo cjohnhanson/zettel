@@ -33,3 +33,51 @@ assertions:
     command: "zettel note list --provenance ' reviewed , unknown ' | grep -q 'Editable'"
   - name: "failed edit keeps the old provenance"
     command: "! zettel note edit editable -p '' >/dev/null 2>&1 && zettel note show editable --field provenance | grep -q 'agent:summary'"
+
+  # Round two of the cold review: the guards the CLI was missing.
+  - name: "a body marker may not carry a review stamp"
+    command: "! zettel note create 'Body forge' -b '<!-- prov agent:inference reviewed=2026-01-01 -->\nx\n<!-- /prov -->' >/dev/null 2>&1"
+  - name: "an inline body marker may not carry one either"
+    command: "! zettel note create 'Inline forge' -b '<!-- prov human:cody reviewed=2026-01-01 -->x<!-- /prov -->' >/dev/null 2>&1"
+  - name: "appending a stamped marker is refused"
+    command: "! zettel note edit editable --append '<!-- prov agent:summary reviewer=nobody -->\ny\n<!-- /prov -->' >/dev/null 2>&1"
+  - name: "neither forged note was written"
+    command: "zettel note list | grep -qE 'Body forge|Inline forge'"
+    should_fail: true
+  - name: "an honest body marker is still accepted"
+    command: "zettel note create 'Honest marker' -b '<!-- prov agent:inference -->\na guess\n<!-- /prov -->' >/dev/null && zettel note show honest-marker | grep -q 'a guess'"
+
+  # An id becomes a file path, so it must name one document.
+  - name: "an id that climbs out of the store is not found"
+    command: "printf 'OUTSIDE\n' > ../outside.md; ! zettel note edit ../outside --append 'INJECTED' >/dev/null 2>&1"
+  - name: "the outside file is untouched"
+    command: "grep -qx 'OUTSIDE' ../outside.md"
+  - name: "an absolute id is not found"
+    command: "! zettel note edit /tmp/anything --title PWNED >/dev/null 2>&1"
+  - name: "delete refuses a path too"
+    command: "! zettel note delete ../outside >/dev/null 2>&1 && test -f ../outside.md"
+
+  # A title is caller-supplied text, and '---' in it once cut the
+  # document in half on the next read.
+  - name: "a title holding three dashes survives an edit"
+    command: "zettel note create 'Pooling --- stale reads' -p human:cody >/dev/null && zettel note edit pooling-stale-reads --add-tag bug >/dev/null && zettel note show pooling-stale-reads --field provenance | grep -q 'human:cody'"
+  - name: "and keeps its tag"
+    command: "zettel note show pooling-stale-reads | grep -q 'bug'"
+
+  # A pattern arrives from the network on a served store.
+  - name: "a pattern that compiles too large is refused fast"
+    command: "! zettel search '[\\s\\S]{3000}zzz' >/dev/null 2>&1"
+  - name: "an over-long pattern is refused"
+    command: "! zettel search \"$(python3 -c 'print(\"a\"*2000)')\" >/dev/null 2>&1"
+  - name: "an ordinary search still works"
+    command: "zettel search 'Honest' | grep -q 'Honest marker'"
+
+  # One unreadable file must not empty the store.
+  - name: "an unreadable note is skipped, not fatal"
+    command: "printf '\\xff\\xfe' > .zettel/broken-bytes.md && zettel note list | grep -q 'Editable'"
+  - name: "and the count still includes the good notes"
+    command: "test $(zettel note list --format json | jq 'length') -ge 2"
+  - name: "check names the unreadable file"
+    command: "zettel check 2>&1 | grep -q 'broken-bytes'"
+  - name: "removing it clears the finding"
+    command: "rm -f .zettel/broken-bytes.md && zettel check"
