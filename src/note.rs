@@ -20,7 +20,7 @@ pub struct NoteFrontmatter {
     /// Frontmatter keys zettel does not model. They are kept so an edit
     /// never drops a key a user or another tool added.
     #[serde(flatten)]
-    pub extra: serde_yml::Mapping,
+    pub extra: yaml_serde::Mapping,
 }
 
 /// A parsed note with its ID and content.
@@ -40,7 +40,7 @@ pub fn new_frontmatter(title: &str) -> NoteFrontmatter {
         links: vec![],
         created: Some(now.clone()),
         updated: Some(now),
-        extra: serde_yml::Mapping::new(),
+        extra: yaml_serde::Mapping::new(),
     }
 }
 
@@ -62,7 +62,7 @@ pub fn parse_note(content: &str) -> crate::error::Result<(NoteFrontmatter, Strin
 
 /// Serialize a note to frontmattered markdown.
 ///
-/// serde_yml does the YAML, so a title, tag, or link with a comma, a
+/// yaml_serde does the YAML, so a title, tag, or link with a comma, a
 /// quote, a colon, or a backslash is escaped correctly. The old
 /// hand-rolled writer produced a file that no longer parsed, and one
 /// bad file broke repo-wide commands. Unknown frontmatter keys survive
@@ -105,7 +105,7 @@ mod serialize_tests {
             links: vec!["ab12".to_string(), "x, y".to_string()],
             created: Some("2020-01-01T00:00:00Z".to_string()),
             updated: Some("2020-01-02T00:00:00Z".to_string()),
-            extra: serde_yml::Mapping::new(),
+            extra: yaml_serde::Mapping::new(),
         };
         let (back, _) = round_trip(&fm, "body text");
         assert_eq!(back.title, fm.title);
