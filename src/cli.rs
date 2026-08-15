@@ -704,7 +704,17 @@ pub fn run(args: Args) -> crate::Result<()> {
                                     (true, None) => "  synced (age unknown)".to_string(),
                                     _ => String::new(),
                                 };
-                                println!("{label}  {}  {state}{age}", m.source);
+                                // A registry override answers for the
+                                // declared source, so the row that
+                                // prints the pin must say what it is
+                                // really reading.
+                                let bound = match &m.override_path {
+                                    Some(path) => {
+                                        format!("  (registry override: {path}; the pin is bypassed)")
+                                    }
+                                    None => String::new(),
+                                };
+                                println!("{label}  {}  {state}{age}{bound}", m.source);
                             }
                         }
                     }
@@ -803,6 +813,7 @@ pub fn run(args: Args) -> crate::Result<()> {
                             "unreviewed_agent": stats.span_counts.unreviewed_agent,
                         },
                         "orphans": stats.orphan_count,
+                        "orphans_in_this_store": stats.local_orphan_count,
                         "tags": stats.tag_counts.iter().map(|(t, c)| serde_json::json!({"tag": t, "count": c})).collect::<Vec<_>>(),
                         "most_connected": stats.most_connected.iter().map(|(id, title, c)| serde_json::json!({"id": id, "title": title, "backlinks": c})).collect::<Vec<_>>(),
                     });
@@ -815,7 +826,14 @@ pub fn run(args: Args) -> crate::Result<()> {
                         "spans: {} human, {} agent ({} unreviewed), {} citation, {} unknown",
                         c.human, c.agent, c.unreviewed_agent, c.citation, c.unknown
                     );
-                    println!("{} orphans", stats.orphan_count);
+                    if stats.has_dependencies {
+                        println!(
+                            "{} orphans (closure; {} in this store)",
+                            stats.orphan_count, stats.local_orphan_count
+                        );
+                    } else {
+                        println!("{} orphans", stats.orphan_count);
+                    }
                     if !stats.tag_counts.is_empty() {
                         println!();
                         println!("Tags:");
