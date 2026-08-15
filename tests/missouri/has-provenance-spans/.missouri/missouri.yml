@@ -1,4 +1,15 @@
 transitions:
+  # An unmarked span carries the note default, which covers every other
+  # unmarked span. Approving one by number must not approve the rest.
+  - name: "approve one unmarked span by number"
+    command: "zettel note review attention-is-not-explanation --approve 1 --reviewer cody"
+    stdout: "1 span(s) approved\n"
+    target: "../one-span-approved"
+    comparators:
+      files:
+        - path: ".zettel/"
+          ignore: true
+
   # The exact count pins that the shared default stamps and counts once.
   - name: "approve all agent spans"
     command: "zettel note review attention-is-not-explanation --approve all --reviewer cody"
@@ -63,3 +74,4 @@ assertions:
     command: "zettel stats | grep -qx 'spans: 1 human, 2 agent (2 unreviewed), 1 citation, 0 unknown'"
   - name: "a span-level filter matches despite the note default"
     command: "zettel note list --provenance citation | grep -q 'Attention'"
+
