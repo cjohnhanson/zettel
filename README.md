@@ -49,6 +49,7 @@ zettel store list                            # show this store and the stores it
 zettel check                                 # check for broken links and invalid provenance
 zettel migrate                               # convert pre-provenance notes (status keys)
 zettel stats                                 # show counts, tag distribution, and connectivity
+zettel serve [--bind ADDR] [--access MODE]   # serve this knowledge base over MCP
 zettel docs [topic]                          # show the bundled documentation
 ```
 
@@ -138,6 +139,24 @@ other, because each one is equally reachable.
 Each command runs from one store. It reads that store and the stores
 that the store declares. Thus one note has different backlinks in
 different stores. Dependency stores are read-only.
+
+## Serving over MCP
+
+`zettel serve` offers the same knowledge base to a Model Context
+Protocol client. The library answers both interfaces, so the server
+returns what the CLI returns.
+
+```sh
+zettel serve                        # speak MCP on stdin and stdout
+zettel serve --bind 127.0.0.1:7431  # serve over HTTP for a client that connects
+zettel serve --access read-write    # also allow note creation
+```
+
+The server is read-only by default. With `--access read-write` it
+stamps every note it writes as agent-written. It refuses any other
+provenance, and it never exposes approval. A served store has no
+authentication: bind it to `127.0.0.1`, or put a proxy that
+authenticates in front of it.
 
 ## Documentation
 

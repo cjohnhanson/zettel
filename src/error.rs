@@ -51,7 +51,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
 
     #[error("{0}")]
-    Yaml(#[from] serde_yml::Error),
+    Yaml(#[from] yaml_serde::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

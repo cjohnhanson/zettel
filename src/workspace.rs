@@ -32,7 +32,7 @@ impl DocumentSource for NoteSource {
         // store.
         let dir_name = if content.exists("zettel.yml") {
             let text = content.read("zettel.yml")?;
-            serde_yml::from_str::<ZettelConfig>(&text)
+            yaml_serde::from_str::<ZettelConfig>(&text)
                 .map(|c| c.zettel_dir)
                 .unwrap_or_else(|_| ".zettel".to_string())
         } else {
@@ -576,7 +576,7 @@ impl Workspace {
         let config_path = root.join("zettel.yml");
         let dir_name = std::fs::read_to_string(config_path.as_std_path())
             .ok()
-            .and_then(|text| serde_yml::from_str::<ZettelConfig>(&text).ok())
+            .and_then(|text| yaml_serde::from_str::<ZettelConfig>(&text).ok())
             .map_or_else(|| ".zettel".to_string(), |c| c.zettel_dir);
         let dir = root.join(&dir_name);
         let Ok(entries) = std::fs::read_dir(&dir) else {

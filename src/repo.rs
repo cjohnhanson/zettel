@@ -60,7 +60,7 @@ impl Repo {
             return Err(Error::NotInitialized);
         }
         let content = std::fs::read_to_string(&config_path)?;
-        let config: ZettelConfig = serde_yml::from_str(&content)?;
+        let config: ZettelConfig = yaml_serde::from_str(&content)?;
         Ok(Repo {
             root: root.to_owned(),
             config,
@@ -952,7 +952,7 @@ impl Repo {
         if !dir.exists() {
             return Ok(changes);
         }
-        let status_key = serde_yml::Value::String("status".into());
+        let status_key = yaml_serde::Value::String("status".into());
         let mut paths: Vec<Utf8PathBuf> = Vec::new();
         for entry in std::fs::read_dir(&dir)? {
             let entry = entry?;
