@@ -1,6 +1,6 @@
 assertions:
-  - name: "check detects broken link"
-    command: "zettel check 2>&1 | grep -q 'broken link'"
+  - name: "check detects the dangling reference"
+    command: "zettel check 2>&1 | grep -q 'nonexistent-note'"
   - name: "check exits non-zero"
     command: "zettel check; test $? -ne 0"
   - name: "check shows the dangling target"
