@@ -18,7 +18,7 @@ assertions:
     command: "grep -c '^$' .zettel/*attention-is-not-explanation.md | grep -q '4'"
   - name: "check passes"
     command: "zettel check"
-    stdout: "no broken links\n"
+    stdout: "no problems found\n"
   - name: "stats shows the reviewed span counts"
     command: "zettel stats | grep -qx 'spans: 1 human, 2 agent (0 unreviewed), 1 citation, 0 unknown'"
   - name: "the list column carries the stamped spec and the title"

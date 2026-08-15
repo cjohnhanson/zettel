@@ -28,7 +28,9 @@ pub const ATTR_REVIEWER: &str = "reviewer";
 pub fn from_mdstore(e: mdstore::Error) -> Error {
     match e {
         mdstore::Error::InvalidProvenance(msg) => Error::InvalidProvenance(msg),
-        other => Error::InvalidProvenance(other.to_string()),
+        // A store-layer failure is not a provenance problem. Calling it
+        // one sent a reader looking at the wrong thing.
+        other => Error::Store(other.to_string()),
     }
 }
 

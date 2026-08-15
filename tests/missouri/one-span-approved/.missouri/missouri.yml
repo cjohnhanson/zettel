@@ -1,0 +1,19 @@
+doc: |
+  One unmarked span approved by number. The note default covers every
+  other unmarked span, so stamping the default would approve text the
+  reviewer never named.
+
+assertions:
+  - name: "the approved span carries its own stamp"
+    command: "zettel note review attention-is-not-explanation | grep 'reviewed=' | grep -q 'The paper shows'"
+  - name: "the note default is not stamped"
+    command: "zettel note show attention-is-not-explanation --field provenance"
+    stdout: "agent:summary\n"
+  - name: "the note stays in the review queue"
+    command: "zettel note list --unreviewed | grep -q 'Attention'"
+  - name: "the other agent span is still unreviewed"
+    command: "zettel note review attention-is-not-explanation | grep 'agent:inference' | grep -q 'reviewed='"
+    should_fail: true
+  - name: "approving the rest clears the queue"
+    command: "zettel note review attention-is-not-explanation --approve all --reviewer cody >/dev/null && zettel note list --unreviewed"
+    stdout: ""

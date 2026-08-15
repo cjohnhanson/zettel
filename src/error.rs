@@ -18,6 +18,15 @@ pub enum Error {
     #[error("invalid provenance: {0}")]
     InvalidProvenance(String),
 
+    #[error("store: {0}")]
+    Store(String),
+
+    #[error("{tool} needs '{arg}'")]
+    MissingArgument { tool: String, arg: String },
+
+    #[error("no tool named '{0}'")]
+    UnknownTool(String),
+
     #[error("span {0} is not an agent span; review applies to agent spans")]
     SpanNotAgent(usize),
 

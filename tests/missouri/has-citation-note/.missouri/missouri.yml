@@ -16,4 +16,4 @@ assertions:
     command: "zettel context cited-source --format json | jq -e '[.[].title] | index(\"Citing note\")'"
   - name: "an external citation key is not a broken link"
     command: "zettel check"
-    stdout: "no broken links\n"
+    stdout: "no problems found\n"

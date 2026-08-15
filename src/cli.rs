@@ -65,7 +65,7 @@ pub enum Command {
     /// Show the declared stores and what this vantage can see
     Store(StoreArgs),
 
-    /// Check the notes for broken links and invalid provenance
+    /// Check the notes and the declared stores for problems
     Check,
 
     /// Convert pre-provenance notes (status keys) to the provenance model
@@ -714,23 +714,23 @@ pub fn run(args: Args) -> crate::Result<()> {
         }
 
         Command::Check => {
-            let repo = Repo::open(&root)?;
-            let mut broken = repo.check()?;
+            Repo::open(&root)?;
+            // The whole of check lives in the library, so a server
+            // reports exactly what the command line prints.
             let ws = crate::workspace::Workspace::open(&root)?;
-            broken.extend(ws.check(&root));
-            if broken.is_empty() {
-                println!("no broken links");
-            } else {
-                println!("{} broken link(s):", broken.len());
-                for bl in &broken {
-                    println!(
-                        "  {} ({}) → {} [{}]",
-                        bl.source_id, bl.source_title, bl.target, bl.location
-                    );
-                }
-                std::process::exit(1);
+            let findings = ws.check(&root);
+            if findings.is_empty() {
+                println!("no problems found");
+                return Ok(());
             }
-            Ok(())
+            println!("{} problem(s):", findings.len());
+            for f in &findings {
+                println!(
+                    "  {} ({}) → {} [{}]",
+                    f.source_id, f.source_title, f.target, f.location
+                );
+            }
+            std::process::exit(1);
         }
 
         Command::Serve(a) => {
@@ -785,8 +785,12 @@ pub fn run(args: Args) -> crate::Result<()> {
         },
 
         Command::Stats(a) => {
-            let repo = Repo::open(&root)?;
-            let stats = repo.stats()?;
+            Repo::open(&root)?;
+            // The workspace holds the loaded graph, so the orphan count
+            // and the connection counts agree with what orphans and
+            // backlinks report.
+            let ws = crate::workspace::Workspace::open(&root)?;
+            let stats = ws.stats();
             match a.format {
                 OutputFormat::Json => {
                     let json = serde_json::json!({

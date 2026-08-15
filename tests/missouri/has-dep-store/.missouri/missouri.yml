@@ -61,9 +61,9 @@ assertions:
     stdout: "mine\n"
 
   # check
-  - name: "a working cross-store link is not a broken link"
+  - name: "a working cross-store link is not a problem"
     command: "zettel check"
-    stdout: "no broken links\n"
+    stdout: "no problems found\n"
   - name: "a private store may declare a local path"
     command: "zettel check 2>&1 | grep -q 'declaration'"
     should_fail: true

@@ -76,11 +76,11 @@ transitions:
         - path: ".zettel/"
           ignore: true
 
-  - name: "inject an invalid marker"
+  # zettel refuses to write a marker the vocabulary does not accept, so
+  # a bad marker now arrives only by editing the file outside zettel.
+  - name: "hand-edit an invalid marker into a note"
     command: |
-      zettel note edit attention-is-not-explanation --body '<!-- prov robot -->
-      mystery text
-      <!-- /prov -->'
+      printf -- '---\ntitle: Attention is not explanation\ntags:\n- ml\n- interpretability\nlinks: []\ncreated: 2020-01-01T00:00:00Z\nupdated: 2020-01-01T00:00:00Z\n---\n\n<!-- prov robot -->\nmystery text\n<!-- /prov -->\n' > .zettel/$(zettel note list --format json | jq -r '.[0].id').md
     target: "../has-invalid-marker"
     comparators:
       files:
@@ -166,9 +166,9 @@ assertions:
     command: "zettel stats --format json | jq -e '.total == 1'"
   - name: "stats json has span counts"
     command: "zettel stats --format json | jq -e '.spans.unreviewed_agent == 0'"
-  - name: "check passes with no broken links"
+  - name: "check passes with nothing wrong"
     command: "zettel check"
-    stdout: "no broken links\n"
+    stdout: "no problems found\n"
   - name: "orphans json format"
     command: "zettel orphans --format json | jq -e 'type == \"array\"'"
   - name: "colonless where selector fails"

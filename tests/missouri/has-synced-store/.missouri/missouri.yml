@@ -39,7 +39,7 @@ assertions:
     command: "! zettel note edit handbook:handbook-entry --add-tag x >/dev/null 2>&1 && zettel note edit handbook:handbook-entry --add-tag x 2>&1 >/dev/null | grep -q 'read-only'"
   - name: "a working cross-store link is not broken"
     command: "zettel check"
-    stdout: "no broken links\n"
+    stdout: "no problems found\n"
   - name: "the closure is whole, so nothing reports partial"
     command: "zettel orphans 2>&1 >/dev/null | grep -q 'partial'"
     should_fail: true

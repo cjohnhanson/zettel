@@ -84,9 +84,10 @@ impl ZettelServer {
         let mut tools = vec![
             Tool::new(
                 "zettel_list_notes",
-                "List the notes this knowledge base reaches, with their provenance. Filter \
-                 by tag, or by provenance tokens such as human, agent, citation, reviewed, \
-                 unknown.",
+                "List the notes this store owns, with their provenance. Filter by tag, or \
+                 by provenance tokens such as human, agent, citation, reviewed, unknown. \
+                 A note in a declared store is reached through zettel_context or a \
+                 zettel://note/ resource.",
                 Arc::new(schema_with(&[
                     ("tag", "Only notes with this tag.", false),
                     ("provenance", "Comma-separated provenance tokens.", false),
@@ -100,8 +101,8 @@ impl ZettelServer {
             ),
             Tool::new(
                 "zettel_search",
-                "Search the notes with a regular expression, across titles, tags, and \
-                 bodies.",
+                "Search the notes this store owns with a regular expression, across \
+                 titles, tags, and bodies.",
                 Arc::new(schema_with(&[("pattern", "A regular expression.", true)])),
             ),
             Tool::new(
@@ -142,6 +143,19 @@ impl ZettelServer {
 
     fn call(&self, name: &str, args: &Map<String, Value>) -> Result<String> {
         let text = |key: &str| args.get(key).and_then(Value::as_str).map(str::to_string);
+        // A missing or mistyped argument is not a note that could not
+        // be found, and reporting it that way sent the caller looking
+        // for the wrong problem.
+        let required = |key: &str| -> Result<String> {
+            match args.get(key) {
+                Some(Value::String(v)) => Ok(v.clone()),
+                Some(_) => Err(Error::InvalidProvenance(format!("'{key}' must be a string"))),
+                None => Err(Error::MissingArgument {
+                    tool: name.to_string(),
+                    arg: key.to_string(),
+                }),
+            }
+        };
         match name {
             "zettel_list_notes" => {
                 let repo = crate::Repo::open(&self.root())?;
@@ -164,14 +178,13 @@ impl ZettelServer {
                 Ok(pretty(&listed))
             }
             "zettel_read_note" => {
-                let id = text("id").ok_or_else(|| Error::NoteNotFound("id is required".into()))?;
+                let id = required("id")?;
                 let ws = self.workspace()?;
                 let view = ws.find(&id)?;
                 Ok(pretty(&view.note.view(&view.qualified)))
             }
             "zettel_search" => {
-                let pattern = text("pattern")
-                    .ok_or_else(|| Error::NoteNotFound("pattern is required".into()))?;
+                let pattern = required("pattern")?;
                 let repo = crate::Repo::open(&self.root())?;
                 let results: Vec<Value> = repo
                     .search(&pattern)?
@@ -187,30 +200,46 @@ impl ZettelServer {
                 Ok(pretty(&results))
             }
             "zettel_context" => {
-                let id = text("id").ok_or_else(|| Error::NoteNotFound("id is required".into()))?;
-                let depth = args
-                    .get("depth")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(2)
-                    .min(10) as usize;
+                let id = required("id")?;
+                // The schema declares an integer, and a client that
+                // sends a string still gets what it meant.
+                let depth = match args.get("depth") {
+                    None => 2usize,
+                    Some(Value::Number(n)) => n.as_u64().unwrap_or(2) as usize,
+                    Some(Value::String(text)) => text.parse::<usize>().map_err(|_| {
+                        Error::InvalidProvenance(format!("'depth' is not a number: {text}"))
+                    })?,
+                    Some(_) => {
+                        return Err(Error::InvalidProvenance("'depth' must be a number".into()));
+                    }
+                }
+                .clamp(1, 10);
                 let ws = self.workspace()?;
                 let start = ws.find(&id)?;
-                let views: Vec<Value> = ws
-                    .neighborhood(start.id, depth)
+                // Each note comes back in the shape a read returns, so
+                // a caller weighs a neighbour's text by its provenance
+                // exactly as it weighs the note it asked for.
+                let neighbourhood = ws.neighborhood(start.id, depth);
+                let views: Vec<Value> = neighbourhood
                     .iter()
                     .map(|v| {
-                        json!({
-                            "id": v.qualified,
-                            "title": v.note.frontmatter.title,
-                            "store": ws.store_label(v.id),
-                            "body": v.note.body,
-                        })
+                        let mut value = serde_json::to_value(v.note.view(&v.qualified))
+                            .unwrap_or_default();
+                        if let Some(obj) = value.as_object_mut() {
+                            obj.insert("store".into(), json!(ws.store_label(v.id)));
+                        }
+                        value
                     })
                     .collect();
-                Ok(pretty(&views))
+                // A graph answer over an incomplete closure is wrong,
+                // not approximate. Say which stores are missing.
+                Ok(pretty(&json!({
+                    "notes": views,
+                    "unreachable": ws.missing(),
+                })))
             }
             "zettel_backlinks" => {
-                let id = text("id").ok_or_else(|| Error::NoteNotFound("id is required".into()))?;
+                let id = required("id")?;
                 let ws = self.workspace()?;
                 let target = ws.find(&id)?;
                 let views: Vec<Value> = ws
@@ -224,8 +253,7 @@ impl ZettelServer {
                 self.config
                     .ensure_writable()
                     .map_err(crate::provenance::from_mdstore)?;
-                let title = text("title")
-                    .ok_or_else(|| Error::NoteNotFound("title is required".into()))?;
+                let title = required("title")?;
                 // The server stamps the provenance. A caller cannot ask
                 // for `human`, and cannot omit it: this note was
                 // written by an agent, and the store should say so.
@@ -267,7 +295,7 @@ impl ZettelServer {
                      'zettel note review {id} --approve all'"
                 ))
             }
-            other => Err(Error::UnknownField(other.to_string())),
+            other => Err(Error::UnknownTool(other.to_string())),
         }
     }
 }
@@ -280,10 +308,19 @@ fn schema_with(fields: &[(&str, &str, bool)]) -> Map<String, Value> {
     let mut properties = Map::new();
     let mut required = Vec::new();
     for (name, description, is_required) in fields {
-        properties.insert(
-            (*name).to_string(),
-            json!({ "type": "string", "description": description }),
-        );
+        // A declared type the code does not read is a promise the
+        // server breaks. depth is the one number here.
+        let schema = if *name == "depth" {
+            json!({
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10,
+                "description": description,
+            })
+        } else {
+            json!({ "type": "string", "description": description })
+        };
+        properties.insert((*name).to_string(), schema);
         if *is_required {
             required.push(json!(name));
         }

@@ -241,6 +241,10 @@ impl Repo {
         }
 
         let body = opts.body.as_deref().unwrap_or("");
+        // A marker the vocabulary does not accept makes every span in
+        // the note read as unknown, and the note can then never be
+        // reviewed. Refuse it at the point of writing.
+        crate::provenance::resolve_spans(fm.provenance.as_deref(), body)?;
         let content = note::serialize_note(&fm, body);
         mdstore::store::write_document(note_path.as_std_path(), &content)
             .map_err(crate::provenance::from_mdstore)?;
@@ -418,6 +422,7 @@ impl Repo {
             fm.links.retain(|l| l != link);
         }
 
+        crate::provenance::resolve_spans(fm.provenance.as_deref(), &body)?;
         note::update_timestamp(&mut fm);
         let new_content = note::serialize_note(&fm, &body);
         mdstore::store::write_document(note_path.as_std_path(), &new_content)
@@ -893,9 +898,26 @@ impl Repo {
                     stamped += 1;
                 }
                 None => {
-                    if let Some(d) = &mut default
+                    // An unmarked span carries the note default, which
+                    // covers every other unmarked span too. Stamping
+                    // the default would approve text the reviewer did
+                    // not name, so a named span gets its own marker
+                    // holding exactly what the reviewer approved.
+                    if spans.is_some() {
+                        if let Some(d) = &default {
+                            let mut own = d.clone();
+                            own.set_attr(crate::provenance::ATTR_REVIEWED, &today);
+                            if let Some(r) = reviewer {
+                                own.set_attr(crate::provenance::ATTR_REVIEWER, r);
+                            }
+                            raw[i].marker = Some(own);
+                            stamped += 1;
+                        }
+                    } else if let Some(d) = &mut default
                         && !default_stamped
                     {
+                        // 'all' approves everything the default covers,
+                        // so stamping the default once is exact.
                         stamp_default(d);
                         default_stamped = true;
                         stamped += 1;
@@ -986,13 +1008,24 @@ impl std::fmt::Display for MigrateAction {
     }
 }
 
+/// One problem that `check` reports.
+///
+/// Not every problem is a broken link. Calling an unreachable store or
+/// a skipped file a broken link sent a reader looking for a reference
+/// that does not exist.
 #[derive(Debug, Serialize)]
-pub struct BrokenLink {
+pub struct Finding {
+    /// What holds the problem: a note ID, or a config file.
     pub source_id: String,
     pub source_title: String,
+    /// What is wrong.
     pub target: String,
+    /// The class of problem, so a caller can group them.
     pub location: String,
 }
+
+/// The old name, kept so a caller that used it still compiles.
+pub type BrokenLink = Finding;
 
 #[derive(Debug, Serialize)]
 pub struct SearchResult {

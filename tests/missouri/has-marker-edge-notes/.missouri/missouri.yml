@@ -23,4 +23,4 @@ assertions:
     command: "zettel note review quoted-citation-attrs --approve all >/dev/null && grep -q 'citation:ddia src=https://example.com/a?b=1 title=\"Data Intensive Apps\" p=212' .zettel/*quoted-citation-attrs.md"
   - name: "check passes on every edge note"
     command: "zettel check"
-    stdout: "no broken links\n"
+    stdout: "no problems found\n"

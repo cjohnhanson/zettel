@@ -506,6 +506,109 @@ impl Workspace {
         found
     }
 
+    /// The knowledge base statistics, computed on the loaded graph.
+    ///
+    /// The orphan count and the connection counts come from the same
+    /// graph that `orphans` and `backlinks` answer from. Computing them
+    /// twice, in two places, produced two different definitions of an
+    /// orphan and two answers that contradicted each other.
+    pub fn stats(&self) -> crate::Stats {
+        let local = self.local();
+        let total = local.len();
+
+        let mut span_counts = crate::SpanCounts::default();
+        let mut tag_counts: Vec<(String, usize)> = Vec::new();
+        for view in &local {
+            for tag in &view.note.frontmatter.tags {
+                if let Some(entry) = tag_counts.iter_mut().find(|(t, _)| t == tag) {
+                    entry.1 += 1;
+                } else {
+                    tag_counts.push((tag.clone(), 1));
+                }
+            }
+            let spans = crate::provenance::resolve_spans_lenient(
+                view.note.frontmatter.provenance.as_deref(),
+                &view.note.body,
+            );
+            for s in &spans {
+                match s.marker.as_ref().map(|m| m.origin.as_str()) {
+                    Some(crate::provenance::ORIGIN_HUMAN) => span_counts.human += 1,
+                    Some(crate::provenance::ORIGIN_AGENT) => span_counts.agent += 1,
+                    Some(crate::provenance::ORIGIN_CITATION) => span_counts.citation += 1,
+                    _ => span_counts.unknown += 1,
+                }
+                if crate::provenance::is_unreviewed_agent(s.marker.as_ref()) {
+                    span_counts.unreviewed_agent += 1;
+                }
+            }
+        }
+        tag_counts.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
+
+        let mut most_connected: Vec<(String, String, usize)> = local
+            .iter()
+            .map(|v| {
+                (
+                    v.qualified.clone(),
+                    v.note.frontmatter.title.clone(),
+                    self.backlinks(v.id).len(),
+                )
+            })
+            .collect();
+        most_connected.sort_by_key(|(_, _, count)| std::cmp::Reverse(*count));
+
+        crate::Stats {
+            total,
+            span_counts,
+            tag_counts,
+            most_connected: most_connected.into_iter().take(5).collect(),
+            orphan_count: self.orphans().len(),
+        }
+    }
+
+    /// Files in this store that could not be parsed at all.
+    ///
+    /// The scan skips them, so they are absent from every command. The
+    /// diagnostic command has to survive the corruption it diagnoses,
+    /// which is why this walks the directory rather than the loaded
+    /// notes.
+    fn unparseable(&self, root: &Utf8Path) -> Vec<crate::BrokenLink> {
+        let mut findings = Vec::new();
+        let config_path = root.join("zettel.yml");
+        let dir_name = std::fs::read_to_string(config_path.as_std_path())
+            .ok()
+            .and_then(|text| serde_yml::from_str::<ZettelConfig>(&text).ok())
+            .map_or_else(|| ".zettel".to_string(), |c| c.zettel_dir);
+        let dir = root.join(&dir_name);
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return findings;
+        };
+        let mut paths: Vec<std::path::PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("md"))
+            .filter(|p| mdstore::store::is_regular_file(p))
+            .collect();
+        paths.sort();
+        for path in paths {
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            if let Err(e) = crate::note::parse_note(&text) {
+                findings.push(crate::BrokenLink {
+                    source_id: path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    source_title: "unparseable".to_string(),
+                    target: e.to_string(),
+                    location: "frontmatter".to_string(),
+                });
+            }
+        }
+        findings
+    }
+
     /// Every problem in the closure, as one list.
     ///
     /// This is the whole of `check`. Each interface presents the same
@@ -513,7 +616,23 @@ impl Workspace {
     /// finding assembled in one interface and not the other is how the
     /// two drift apart.
     pub fn check(&self, root: &Utf8Path) -> Vec<crate::BrokenLink> {
-        let mut findings = Vec::new();
+        let mut findings = self.unparseable(root);
+
+        // A note whose provenance the vocabulary does not accept. The
+        // repo-wide commands degrade it to unknown; this names it.
+        for view in self.local() {
+            if let Err(e) = crate::provenance::resolve_spans(
+                view.note.frontmatter.provenance.as_deref(),
+                &view.note.body,
+            ) {
+                findings.push(crate::BrokenLink {
+                    source_id: view.qualified.clone(),
+                    source_title: view.note.frontmatter.title.clone(),
+                    target: e.to_string(),
+                    location: "provenance".to_string(),
+                });
+            }
+        }
 
         // Every reference that named no note, local or cross-store. One
         // resolution path, so a link that works cannot be reported
@@ -576,6 +695,16 @@ impl Workspace {
                 source_title: "registry override".to_string(),
                 target: format!("'{target}' resolves only through a local checkout"),
                 location: "override".to_string(),
+            });
+        }
+
+        // A dependency the walk could not read at all.
+        for finding in &self.snapshot.graph.findings {
+            findings.push(crate::BrokenLink {
+                source_id: "stores.yml".to_string(),
+                source_title: "store declarations".to_string(),
+                target: finding.clone(),
+                location: "declaration".to_string(),
             });
         }
 
