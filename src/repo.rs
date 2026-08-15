@@ -86,6 +86,13 @@ impl Repo {
     // -- ID resolution --
 
     pub fn resolve_id(&self, input: &str) -> Result<String> {
+        // An id becomes a file path here, so it must name one document
+        // and not a path. Without this, `note edit ../../outside` and
+        // `note delete /etc/anything` reach outside the store.
+        if !mdstore::is_plain_stem(input) {
+            return Err(Error::NoteNotFound(input.to_string()));
+        }
+
         let dir = self.zettel_dir();
 
         // Exact match
@@ -245,6 +252,7 @@ impl Repo {
         // the note read as unknown, and the note can then never be
         // reviewed. Refuse it at the point of writing.
         crate::provenance::resolve_spans(fm.provenance.as_deref(), body)?;
+        crate::provenance::refuse_authored_stamps(body)?;
         let content = note::serialize_note(&fm, body);
         mdstore::store::write_document(note_path.as_std_path(), &content)
             .map_err(crate::provenance::from_mdstore)?;
@@ -268,8 +276,16 @@ impl Repo {
                 && mdstore::store::is_regular_file(path.as_std_path())
             {
                 let id = path.file_stem().unwrap_or("").to_string();
-                let content = mdstore::store::read_document(path.as_std_path())
-                    .map_err(crate::provenance::from_mdstore)?;
+                // One unreadable file must not take down a repo-wide
+                // command either. A single non-UTF-8 byte made list,
+                // search and read fail for the whole store.
+                let content = match mdstore::store::read_document(path.as_std_path()) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("warning: skipping {id}: {e}");
+                        continue;
+                    }
+                };
                 // One unparseable file must not take down a repo-wide
                 // command. Skip it with a warning; `zettel check` names it.
                 match note::parse_note(&content) {
@@ -362,6 +378,15 @@ impl Repo {
         }
 
         let body_changed = opts.body.is_some() || opts.append.is_some();
+
+        // Guard the caller's text, never the merged body: the body on
+        // disk may already hold stamps that an approval wrote.
+        if let Some(text) = opts.body {
+            crate::provenance::refuse_authored_stamps(text)?;
+        }
+        if let Some(text) = opts.append {
+            crate::provenance::refuse_authored_stamps(text)?;
+        }
 
         if let Some(new_body) = opts.body {
             body = new_body.to_string();
@@ -540,8 +565,36 @@ impl Repo {
 
     // -- Search --
 
+    /// The longest pattern a caller may send.
+    ///
+    /// A served store takes this text from the network, and a long
+    /// pattern is the raw material of an expensive one.
+    const MAX_PATTERN_BYTES: usize = 1024;
+
+    /// The compiled size a pattern may reach, in bytes.
+    ///
+    /// The default is 10MB, which accepts patterns whose matching cost
+    /// grows to minutes over a store of any size. A bounded repetition
+    /// such as `[\s\S]{3000}zzz` compiles well under the default and
+    /// then runs for hours. A low limit refuses it at compile time,
+    /// where the cost is nothing.
+    const PATTERN_SIZE_LIMIT: usize = 64 * 1024;
+
     pub fn search(&self, pattern: &str) -> Result<Vec<SearchResult>> {
-        let re = regex::Regex::new(pattern)
+        if pattern.len() > Self::MAX_PATTERN_BYTES {
+            return Err(Error::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "the pattern is {} bytes; the limit is {}",
+                    pattern.len(),
+                    Self::MAX_PATTERN_BYTES
+                ),
+            )));
+        }
+        let re = regex::RegexBuilder::new(pattern)
+            .size_limit(Self::PATTERN_SIZE_LIMIT)
+            .dfa_size_limit(Self::PATTERN_SIZE_LIMIT)
+            .build()
             .map_err(|e| Error::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e)))?;
 
         let all_notes = self.list_notes(&ListNotesFilter::default())?;
