@@ -3,13 +3,12 @@ use clap::Parser;
 
 use crate::{CreateNoteOptions, EditNoteOptions, ListNotesFilter, Note, Repo};
 
+/// The one-line description. `--help` prints it and `prime` prints it, from
+/// this one place, so the two cannot drift.
+pub const ABOUT: &str = "Zettelkasten note management on frontmattered markdown";
+
 #[derive(Parser)]
-#[command(
-    name = "zettel",
-    version,
-    about = "Zettelkasten note management on frontmattered markdown",
-    max_term_width = 98
-)]
+#[command(name = "zettel", version, about = ABOUT, max_term_width = 98)]
 pub struct Args {
     /// The root directory of the repository. The default is the current directory.
     #[arg(long, global = true, default_value = ".")]
@@ -76,6 +75,9 @@ pub enum Command {
 
     /// Read the bundled documentation
     Docs(DocsArgs),
+
+    /// Print what zettel is and how to use it, for an agent's context
+    Prime,
 }
 
 #[derive(clap::Args)]
@@ -360,6 +362,34 @@ pub struct StatsArgs {
 }
 
 /// Run Zettel with the given arguments.
+/// The prime: what zettel is, for an agent's context.
+///
+/// A pure function of the binary. It states the model, the provenance
+/// vocabulary, and the one invariant the binary enforces, then the
+/// commands an agent reaches for. It names no other tool, no host, and
+/// no location, and it directs nothing: when to search, and who reviews,
+/// is the caller's policy. Under 700 bytes, checked by a test.
+#[must_use]
+pub fn prime() -> String {
+    format!(
+        "# zettel\n\
+         {ABOUT}\n\
+         A note is a markdown file with frontmatter; notes link by [[id]]. A store is a \
+         directory of notes; --root <dir> names one; its stores.yml may declare others, \
+         linked as [[alias:id]]. Every span carries a provenance: human[:name], \
+         agent[:summary|index|inference], or citation[:source]. A span with none is unknown; \
+         unknown cannot become human. note review <id> --approve <all|N,N> stamps \
+         it reviewed.\n\
+         Commands:\n\
+         \x20 zettel search <pattern>\n\
+         \x20 zettel read [--tag <t>] [--provenance <l>]\n\
+         \x20 zettel context <id>\n\
+         \x20 zettel note create <title> -t <tags> -p <origin[:qualifier]> -b <body>\n\
+         \x20 zettel store list\n\
+         More: zettel --help; zettel docs\n"
+    )
+}
+
 pub fn run(args: Args) -> crate::Result<()> {
     let root = if args.root.is_relative() {
         let cwd = std::env::current_dir()?;
@@ -710,7 +740,9 @@ pub fn run(args: Args) -> crate::Result<()> {
                                 // really reading.
                                 let bound = match &m.override_path {
                                     Some(path) => {
-                                        format!("  (registry override: {path}; the pin is bypassed)")
+                                        format!(
+                                            "  (registry override: {path}; the pin is bypassed)"
+                                        )
                                     }
                                     None => String::new(),
                                 };
@@ -745,12 +777,8 @@ pub fn run(args: Args) -> crate::Result<()> {
 
         Command::Serve(a) => {
             Repo::open(&root)?;
-            let config = crate::serve::config_from(
-                root.as_std_path(),
-                &a.surfaces,
-                &a.access,
-                "zettel",
-            )?;
+            let config =
+                crate::serve::config_from(root.as_std_path(), &a.surfaces, &a.access, "zettel")?;
             crate::serve::run(config, a.bind.as_deref())
         }
 
@@ -768,6 +796,10 @@ pub fn run(args: Args) -> crate::Result<()> {
             Ok(())
         }
 
+        Command::Prime => {
+            print!("{}", prime());
+            Ok(())
+        }
         Command::Docs(args) => match args.topic.as_deref() {
             None | Some("list") => {
                 crate::docs::list();
@@ -961,7 +993,6 @@ fn print_note_json_qualified(n: &Note, qualified: &str) {
     print_note_json_with_id(n, qualified)
 }
 
-
 fn print_note_json_with_id(n: &Note, qualified: &str) {
     let json = serde_json::to_value(n.view(qualified)).unwrap_or_default();
     println!("{}", serde_json::to_string_pretty(&json).unwrap());
@@ -998,4 +1029,100 @@ fn print_note_field(n: &Note, field: &str) -> crate::Result<()> {
         println!("{v}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod prime_tests {
+    use super::*;
+    use clap::CommandFactory as _;
+
+    #[test]
+    fn prime_has_the_contract_shape() {
+        let p = prime();
+        let lines: Vec<&str> = p.lines().collect();
+        assert!(p.len() <= 700, "prime is {} bytes; the cap is 700", p.len());
+        assert_eq!(lines[0], "# zettel");
+        assert_eq!(lines[1], ABOUT, "line 2 is the --help about string");
+        assert!(
+            p.ends_with('\n') && !p.ends_with("\n\n"),
+            "one trailing newline"
+        );
+        assert!(!p.contains('\t'), "no tabs");
+        assert!(!p.contains("[gaff:"), "no spoofable prefix");
+        assert!(
+            !p.chars().any(|c| c.is_control() && c != '\n'),
+            "no control chars"
+        );
+        assert!(
+            lines.iter().skip(1).all(|l| !l.starts_with('#')),
+            "no headings below line 1"
+        );
+        assert!(
+            lines
+                .last()
+                .unwrap()
+                .starts_with("More: zettel --help; zettel docs")
+        );
+        for word in [
+            "gaff",
+            "tisket",
+            "almanac",
+            "mdstore",
+            "Claude",
+            ".zettel/",
+            "always",
+            "never ",
+            "session start",
+            "before you",
+        ] {
+            assert!(!p.contains(word), "prime must not say {word:?}");
+        }
+    }
+
+    #[test]
+    fn every_prime_command_exists() {
+        let p = prime();
+        let cmd = Args::command();
+        let start = p.find("Commands:\n").expect("a Commands: block") + "Commands:\n".len();
+        let end = p.find("More:").expect("a More: line");
+        for line in p[start..end].lines() {
+            let mut words = line.split_whitespace();
+            assert_eq!(
+                words.next(),
+                Some("zettel"),
+                "{line:?} starts with the tool"
+            );
+            let mut node = &cmd;
+            let mut rest: Vec<&str> = Vec::new();
+            for w in words {
+                if let Some(sub) = node.get_subcommands().find(|s| s.get_name() == w) {
+                    node = sub;
+                } else {
+                    rest.push(w);
+                }
+            }
+            assert!(node.get_name() != "zettel", "{line:?} names no subcommand");
+            for w in rest {
+                let flag = w.trim_start_matches('[').trim_end_matches(']');
+                if let Some(long) = flag.strip_prefix("--") {
+                    let long = long.split(' ').next().unwrap();
+                    assert!(
+                        node.get_arguments().any(|a| a.get_long() == Some(long)),
+                        "{line:?}: `--{long}` is not a flag of `{}`",
+                        node.get_name()
+                    );
+                } else if let Some(short) = flag.strip_prefix('-') {
+                    let c = short.chars().next().unwrap();
+                    if short.len() == 1 {
+                        assert!(
+                            node.get_arguments().any(|a| a.get_short() == Some(c)),
+                            "{line:?}: `-{c}` is not a flag of `{}`",
+                            node.get_name()
+                        );
+                    }
+                }
+            }
+        }
+        assert!(p[start..end].lines().count() <= 7, "at most seven commands");
+    }
 }

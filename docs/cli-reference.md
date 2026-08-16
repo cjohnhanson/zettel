@@ -263,6 +263,15 @@ removed either way. A second run changes nothing.
 
 ---
 
+## `zettel prime`
+
+Print what zettel is and how to use it, for an agent's context. The
+output depends only on the binary version: no arguments, config, or
+store changes it. Put it into an agent's context; policy about when to
+use zettel belongs to the caller.
+
+---
+
 ## `zettel docs`
 
 Read the bundled Zettel documentation.
