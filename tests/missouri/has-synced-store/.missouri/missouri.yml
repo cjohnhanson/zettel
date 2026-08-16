@@ -65,3 +65,34 @@ assertions:
     stdout: "Handbook entry\n"
   - name: "both consumers share one clone"
     command: "test $(ls .mdstore-cache | wc -l) -eq 1"
+
+  # A tag pin, lightweight and annotated, and a branch pin that is
+  # pruned once upstream deletes the branch.
+  - name: "a consumer pinned to a lightweight tag reads that revision"
+    command: |
+      (cd upstream && git tag v1 HEAD~1 && git tag -a v2 -m 'two' HEAD && git branch side HEAD) &&
+      printf 'stores:\n  - alias: hb\n    git: file://%s/upstream\n    rev: v1\n' "$PWD" > pinned/stores.yml &&
+      zettel --root pinned store sync >/dev/null &&
+      zettel --root pinned note show hb:handbook-entry --field title | grep -q 'Handbook entry' &&
+      ! zettel --root pinned note show hb:later-entry >/dev/null 2>&1
+  - name: "an annotated tag pins the commit it peels to"
+    command: |
+      printf 'stores:\n  - alias: hb\n    git: file://%s/upstream\n    rev: v2\n' "$PWD" > pinned/stores.yml &&
+      zettel --root pinned note show hb:later-entry --field title
+    stdout: "Later entry\n"
+  - name: "a branch pin follows the branch"
+    command: |
+      printf 'stores:\n  - alias: hb\n    git: file://%s/upstream\n    rev: side\n' "$PWD" > pinned/stores.yml &&
+      zettel --root pinned note show hb:later-entry --field title
+    stdout: "Later entry\n"
+  - name: "a branch deleted upstream is pruned on the next sync"
+    command: |
+      (cd upstream && git branch -D side >/dev/null) &&
+      zettel --root pinned store sync >/dev/null &&
+      ! zettel --root pinned note show hb:later-entry >/dev/null 2>&1 &&
+      zettel --root pinned store list | grep '^hb ' | grep -q 'unavailable'
+  - name: "the tag pins still resolve after that fetch"
+    command: |
+      printf 'stores:\n  - alias: hb\n    git: file://%s/upstream\n    rev: v1\n' "$PWD" > pinned/stores.yml &&
+      zettel --root pinned note show hb:handbook-entry --field title
+    stdout: "Handbook entry\n"
