@@ -35,3 +35,12 @@ assertions:
   - name: "check exits nonzero"
     command: "zettel check"
     should_fail: true
+  # gix has no in-process ssh transport, and zettel spawns no ssh
+  # process, so an ssh URL is refused and the message names https.
+  - name: "an ssh store is refused with the https alternative"
+    command: |
+      mkdir -p sshy && (cd sshy && zettel init >/dev/null &&
+        printf 'format: 2\nstores:\n  - alias: h\n    git: git@example.com:org/kb.git\n' > stores.yml &&
+        ! zettel store sync >/dev/null 2>&1 &&
+        zettel store sync 2>&1 | grep -q 'https' &&
+        test ! -d .mdstore-cache) && rm -rf sshy
