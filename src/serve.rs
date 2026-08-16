@@ -19,10 +19,9 @@ use camino::Utf8PathBuf;
 use mdstore::mcp::{Access, DocUri, ServeConfig, Surface};
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ErrorData as McpError,
-    Implementation, InitializeResult, ListResourcesResult, ListToolsResult,
-    PaginatedRequestParams, ProtocolVersion, ReadResourceRequestParams, ReadResourceResponse,
-    ReadResourceResult, Resource, ResourceContents, ResourcesCapability, ServerCapabilities, Tool,
-    ToolsCapability,
+    Implementation, InitializeResult, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
+    ProtocolVersion, ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, Resource,
+    ResourceContents, ResourcesCapability, ServerCapabilities, Tool, ToolsCapability,
 };
 use rmcp::service::RequestContext;
 use rmcp::{RoleServer, ServerHandler};
@@ -141,16 +140,36 @@ impl ZettelServer {
         tools
     }
 
+    /// Run a closure that touches the filesystem off the async
+    /// workers.
+    ///
+    /// Every surface here reads files, and search runs a regex over
+    /// every body. On the async pool that work blocks the runtime, so
+    /// one slow call delays every other client. `call_tool` got this
+    /// treatment; the resource surface did not, and it reads exactly
+    /// the same things.
+    async fn blocking<T, F>(&self, work: F) -> std::result::Result<T, McpError>
+    where
+        T: Send + 'static,
+        F: FnOnce(Self) -> std::result::Result<T, McpError> + Send + 'static,
+    {
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || work(this))
+            .await
+            .map_err(|e| McpError::internal_error(format!("the call did not finish: {e}"), None))?
+    }
+
     fn call(&self, name: &str, args: &Map<String, Value>) -> Result<String> {
         // An optional argument of the wrong type was dropped, so a
         // filtered query came back unfiltered and marked as success.
         // Absent is fine; wrong is an error.
+        // One accessor for every tool argument, in the crate all three
+        // servers already share. A local copy is a second answer to
+        // the same question, and the copies drifted.
         let text = |key: &str| -> Result<Option<String>> {
-            match args.get(key) {
-                None | Some(Value::Null) => Ok(None),
-                Some(Value::String(v)) => Ok(Some(v.clone())),
-                Some(_) => Err(Error::InvalidProvenance(format!("'{key}' must be a string"))),
-            }
+            mdstore::mcp::optional_str(args, key)
+                .map(|v| v.map(str::to_string))
+                .map_err(|e| Error::InvalidProvenance(e.to_string()))
         };
         // A missing or mistyped argument is not a note that could not
         // be found, and reporting it that way sent the caller looking
@@ -158,7 +177,9 @@ impl ZettelServer {
         let required = |key: &str| -> Result<String> {
             match args.get(key) {
                 Some(Value::String(v)) => Ok(v.clone()),
-                Some(_) => Err(Error::InvalidProvenance(format!("'{key}' must be a string"))),
+                Some(_) => Err(Error::InvalidProvenance(format!(
+                    "'{key}' must be a string"
+                ))),
                 None => Err(Error::MissingArgument {
                     tool: name.to_string(),
                     arg: key.to_string(),
@@ -243,8 +264,8 @@ impl ZettelServer {
                 let views: Vec<Value> = neighbourhood
                     .iter()
                     .map(|v| {
-                        let mut value = serde_json::to_value(v.note.view(&v.qualified))
-                            .unwrap_or_default();
+                        let mut value =
+                            serde_json::to_value(v.note.view(&v.qualified)).unwrap_or_default();
                         if let Some(obj) = value.as_object_mut() {
                             obj.insert("store".into(), json!(ws.store_label(v.id)));
                         }
@@ -449,28 +470,32 @@ impl ServerHandler for ZettelServer {
         if !self.config.surfaces.has(Surface::Resources) {
             return Ok(ListResourcesResult::default());
         }
-        let ws = self.workspace().map_err(|e| to_mcp_error(&e))?;
-        let aliases = ws.aliases();
-        let resources = ws
-            .all()
-            .iter()
-            .map(|v| {
-                let mut resource = Resource::new(
-                    Self::uri_of(&v.qualified, &aliases),
-                    v.note.frontmatter.title.clone(),
-                );
-                resource.mime_type = Some("text/markdown".into());
-                resource.description = Some(format!(
-                    "provenance: {}",
-                    v.note
-                        .frontmatter
-                        .provenance
-                        .clone()
-                        .unwrap_or_else(|| "unknown".into())
-                ));
-                resource
+        let resources = self
+            .blocking(|this| {
+                let ws = this.workspace().map_err(|e| to_mcp_error(&e))?;
+                let aliases = ws.aliases();
+                Ok(ws
+                    .all()
+                    .iter()
+                    .map(|v| {
+                        let mut resource = Resource::new(
+                            Self::uri_of(&v.qualified, &aliases),
+                            v.note.frontmatter.title.clone(),
+                        );
+                        resource.mime_type = Some("text/markdown".into());
+                        resource.description = Some(format!(
+                            "provenance: {}",
+                            v.note
+                                .frontmatter
+                                .provenance
+                                .clone()
+                                .unwrap_or_else(|| "unknown".into())
+                        ));
+                        resource
+                    })
+                    .collect::<Vec<_>>())
             })
-            .collect();
+            .await?;
         Ok(ListResourcesResult::with_all_items(resources))
     }
 
@@ -485,10 +510,15 @@ impl ServerHandler for ZettelServer {
                 None,
             ));
         }
-        let id = self.note_id_of(&request.uri).map_err(|e| to_mcp_error(&e))?;
-        let ws = self.workspace().map_err(|e| to_mcp_error(&e))?;
-        let view = ws.find(&id).map_err(|e| to_mcp_error(&e))?;
-        let text = pretty(&view.note.view(&view.qualified));
+        let uri = request.uri.clone();
+        let text = self
+            .blocking(move |this| {
+                let id = this.note_id_of(&uri).map_err(|e| to_mcp_error(&e))?;
+                let ws = this.workspace().map_err(|e| to_mcp_error(&e))?;
+                let view = ws.find(&id).map_err(|e| to_mcp_error(&e))?;
+                Ok(pretty(&view.note.view(&view.qualified)))
+            })
+            .await?;
         Ok(ReadResourceResult::new(vec![ResourceContents::text(text, request.uri)]).into())
     }
 }
@@ -563,7 +593,9 @@ async fn serve_http(config: ServeConfig, addr: &str) -> Result<()> {
     let router = axum::Router::new()
         .nest_service("/mcp", service)
         .layer(axum::middleware::from_fn(refuse_foreign_origin));
-    let listener = tokio::net::TcpListener::bind(addr).await.map_err(Error::Io)?;
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .map_err(Error::Io)?;
     let bound = listener.local_addr().map_err(Error::Io)?;
     eprintln!(
         "zettel serving on http://{bound}/mcp ({})",
@@ -661,7 +693,9 @@ mod tests {
                 .map(|t| t.name.to_string())
                 .collect();
             assert!(
-                !names.iter().any(|n| n.contains("review") || n.contains("approve")),
+                !names
+                    .iter()
+                    .any(|n| n.contains("review") || n.contains("approve")),
                 "{names:?}"
             );
         }

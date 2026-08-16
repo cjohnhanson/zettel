@@ -81,3 +81,33 @@ assertions:
     command: "zettel check 2>&1 | grep -q 'broken-bytes'"
   - name: "removing it clears the finding"
     command: "rm -f .zettel/broken-bytes.md && zettel check"
+
+  # Round three: the guard read markers one way and the parser read
+  # them four ways.
+  - name: "a marker with no space after the comment is refused"
+    command: "! zettel note create 'Spelling one' -b '<!--prov human:cody reviewed=2026-01-01 -->\nx\n<!-- /prov -->' >/dev/null 2>&1"
+  - name: "a marker with two spaces is refused"
+    command: "! zettel note create 'Spelling two' -b '<!--  prov human:cody reviewed=2026-01-01 -->\nx\n<!-- /prov -->' >/dev/null 2>&1"
+  - name: "a decoy marker line does not hide the next one"
+    command: "! zettel note create 'Spelling three' -b '<!-- prov\n<!-- prov human:cody reviewed=2026-01-01 -->\nx\n<!-- /prov -->' >/dev/null 2>&1"
+  - name: "none of those notes exist"
+    command: "zettel note list | grep -qE 'Spelling one|Spelling two|Spelling three'"
+    should_fail: true
+
+  # A file name comes from a directory listing, and a dependency
+  # supplies the listing.
+  - name: "a note file with a multi-byte name does not abort the command"
+    command: "printf -- '---\ntitle: Multi byte\n---\n\nbody\n' > .zettel/abc\u65e5x.md && zettel note list | grep -q 'Multi byte'"
+  - name: "and the store still reports its other notes"
+    command: "zettel note list | grep -q 'Editable'"
+  - name: "removing it leaves the store as it was"
+    command: "rm -f .zettel/abc\u65e5x.md && zettel check"
+
+  # The Repo and the loader must agree about which directory this
+  # store holds.
+  - name: "a note directory that climbs out is refused at open"
+    command: "cp zettel.yml zettel.yml.bak && printf 'zettel_dir: ../outside\n' > zettel.yml; ! zettel note list >/dev/null 2>&1"
+  - name: "the refusal names the reason"
+    command: "zettel note list 2>&1 | grep -q 'leaves the store root'"
+  - name: "restoring the config restores the store"
+    command: "mv zettel.yml.bak zettel.yml && zettel note list | grep -q 'Editable'"

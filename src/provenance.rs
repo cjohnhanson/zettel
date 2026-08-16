@@ -12,7 +12,7 @@
 //! The `reviewed=DATE` attribute marks human approval of an agent span.
 //! Only `zettel note review` writes it.
 
-use mdstore::provenance::{parse_spans, Marker};
+use mdstore::provenance::{Marker, parse_spans};
 
 use crate::error::{Error, Result};
 
@@ -51,8 +51,7 @@ pub fn parse_authored_spec(spec: &str) -> Result<Marker> {
     let marker = parse_spec(spec)?;
     if marker.attr(ATTR_REVIEWED).is_some() || marker.attr(ATTR_REVIEWER).is_some() {
         return Err(Error::InvalidProvenance(
-            "a review stamp comes from 'note review --approve', not from a written spec"
-                .into(),
+            "a review stamp comes from 'note review --approve', not from a written spec".into(),
         ));
     }
     Ok(marker)
@@ -70,27 +69,64 @@ pub fn parse_authored_spec(spec: &str) -> Result<Marker> {
 /// stamps that `approve_spans` wrote, and re-checking the merged body
 /// would fail every later edit of an approved note.
 pub fn refuse_authored_stamps(text: &str) -> Result<()> {
-    // Read every marker the text holds, not only the ones that open a
-    // span. A marker written inline is inert to the reader of the
-    // graph and still legible to the person reading the file, so a
-    // stamp there claims an approval nobody gave.
-    let mut rest = text;
-    while let Some(start) = rest.find("<!-- prov") {
-        let after = &rest[start + "<!-- prov".len()..];
-        let Some(end) = after.find("-->") else { break };
-        let spec = after[..end].trim();
-        if !spec.is_empty()
-            && let Ok(marker) = mdstore::provenance::Marker::parse(spec)
-            && (marker.attr(ATTR_REVIEWED).is_some() || marker.attr(ATTR_REVIEWER).is_some())
+    // Two checks, for two different lies.
+    //
+    // The first is the real one: a marker the reader will act on. Read
+    // markers exactly as the reader reads them, because a scan of its
+    // own accepted three spellings the parser accepts and the guard
+    // did not see. Text that does not parse is refused rather than
+    // passed: an unreadable marker is not an absent one.
+    for marker in mdstore::markers_in(text).map_err(from_mdstore)? {
+        if carries_a_stamp(&marker) {
+            return Err(stamp_refused());
+        }
+    }
+
+    // The second is cosmetic and still worth refusing. A marker with
+    // text beside it on the line is not a marker to the parser, so it
+    // claims nothing the tool will report. It claims plenty to the
+    // person reading the file, which is the audience an approval is
+    // for.
+    for spec in comment_specs(text) {
+        if let Ok(marker) = mdstore::provenance::Marker::parse(&spec)
+            && carries_a_stamp(&marker)
         {
-            return Err(Error::InvalidProvenance(
-                "a review stamp comes from 'note review --approve', not from a written marker"
-                    .into(),
-            ));
+            return Err(stamp_refused());
+        }
+    }
+    Ok(())
+}
+
+/// True when a marker claims a human read and approved the text.
+fn carries_a_stamp(marker: &mdstore::Marker) -> bool {
+    marker.attr(ATTR_REVIEWED).is_some() || marker.attr(ATTR_REVIEWER).is_some()
+}
+
+fn stamp_refused() -> Error {
+    Error::InvalidProvenance(
+        "a review stamp comes from 'note review --approve', not from a written marker".into(),
+    )
+}
+
+/// The spec of every `prov` comment in a text, wherever it sits.
+///
+/// This finds what a person sees, not what the parser acts on, so it
+/// looks inside a line rather than at whole lines.
+fn comment_specs(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("<!--") {
+        let after = &rest[start + 4..];
+        let Some(end) = after.find("-->") else { break };
+        let inner = after[..end].trim();
+        if let Some(spec) = inner.strip_prefix("prov")
+            && (spec.is_empty() || spec.starts_with(char::is_whitespace))
+        {
+            out.push(spec.trim().to_string());
         }
         rest = &after[end + 3..];
     }
-    Ok(())
+    out
 }
 
 /// Validate a parsed marker against the vocabulary.
@@ -392,7 +428,10 @@ mod tests {
     fn citation_refs_collect_span_and_default_sources() {
         let body = "<!-- prov citation:a3f2 -->\n> q\n<!-- /prov -->\n<!-- prov citation src=https://x -->\n> r\n<!-- /prov -->";
         assert_eq!(citation_refs(None, body), vec!["a3f2".to_string()]);
-        assert_eq!(citation_refs(Some("citation:b7c1"), "quoted text"), vec!["b7c1".to_string()]);
+        assert_eq!(
+            citation_refs(Some("citation:b7c1"), "quoted text"),
+            vec!["b7c1".to_string()]
+        );
         assert!(citation_refs(Some("agent:summary"), "text").is_empty());
     }
 

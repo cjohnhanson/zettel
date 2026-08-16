@@ -8,8 +8,8 @@
 //! clone the repository.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use mdstore::snapshot::{DocId, DocumentSource, Entry, Snapshot};
 use mdstore::registry::{Registry, RegistryLocator};
+use mdstore::snapshot::{DocId, DocumentSource, Entry, Snapshot};
 use mdstore::store::{FetchingLocator, LocalPaths, StoreContent, StoreGraph, StoreRef};
 
 use crate::config::ZettelConfig;
@@ -225,7 +225,10 @@ impl Workspace {
         Ok(Workspace {
             snapshot,
             source: NoteSource,
-            redirected: redirected.into_iter().map(|(u, p)| (u, p.display().to_string())).collect(),
+            redirected: redirected
+                .into_iter()
+                .map(|(u, p)| (u, p.display().to_string()))
+                .collect(),
         })
     }
 
@@ -585,7 +588,10 @@ impl Workspace {
         // above covers this store. Report both rather than pair two
         // scopes silently.
         let orphans = self.orphans();
-        let local_orphans = orphans.iter().filter(|v| !v.qualified.contains(':')).count();
+        let local_orphans = orphans
+            .iter()
+            .filter(|v| !v.qualified.contains(':'))
+            .count();
 
         crate::Stats {
             total,
@@ -611,7 +617,11 @@ impl Workspace {
             .ok()
             .and_then(|text| yaml_serde::from_str::<ZettelConfig>(&text).ok())
             .map_or_else(|| ".zettel".to_string(), |c| c.zettel_dir);
-        let dir = root.join(&dir_name);
+        // The same containment check every other reader makes. Without
+        // it, check walked the escaped directory it exists to report.
+        let Ok(dir) = mdstore::store::document_dir(root.as_std_path(), &dir_name) else {
+            return findings;
+        };
         let Ok(entries) = std::fs::read_dir(&dir) else {
             return findings;
         };
@@ -773,5 +783,4 @@ impl Workspace {
     pub fn is_single_store(&self) -> bool {
         self.snapshot.graph.members.len() == 1
     }
-
 }
