@@ -2161,7 +2161,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 [[package]]
 name = "mdstore"
 version = "0.2.0"
-source = "git+https://github.com/cjohnhanson/mdstore?rev=38af60b#38af60b9ece9c5077d5f570b08bf0da24d8fb5bc"
+source = "git+https://github.com/cjohnhanson/mdstore?rev=3357c4c#3357c4ce1216385e87234013c7c99a21ff53d27f"
 dependencies = [
  "gix",
  "rand",
