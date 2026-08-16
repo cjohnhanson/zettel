@@ -120,7 +120,7 @@ stores:
   - alias: handbook
     git: https://example.com/org/handbook       # a git repository
   - alias: archive
-    blob: s3://bucket/notes                     # object storage
+    blob: https://example.com/notes             # an https prefix with an index.txt
 ```
 
 `zettel store sync` fetches the remote stores into a local cache. It is
