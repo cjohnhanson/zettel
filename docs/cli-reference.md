@@ -186,7 +186,7 @@ stores:
     git: https://example.com/org/handbook
     rev: v1.0                  # optional; the default branch without it
   - alias: archive
-    blob: s3://bucket/notes    # object storage
+    blob: https://example.com/notes    # an https prefix with an index.txt
 ```
 
 A shared store declares an outside dependency by URL, because a path
@@ -201,10 +201,13 @@ you did not ask for.
 
 A git store keeps one bare clone for each URL, and its notes are read
 from git objects at the revision that each store declares. Two stores
-that pin different revisions of one URL therefore share one clone. A
-blob store copies its objects into the cache with the tool for the
-scheme: `aws` for `s3://`, `gcloud` for `gs://`, and `curl` with an
-`index.txt` for `https://`.
+that pin different revisions of one URL therefore share one clone. The
+clone and the fetch run in-process: https and git:// over gix's own
+transports, a local repository by reading its object database. No git
+program runs. An ssh URL is refused, because gix would spawn ssh for
+it; declare the store with https. A blob store is an https prefix that
+publishes an `index.txt`; sync fetches the index and each document by
+GET. `s3://` and `gs://` are refused.
 
 `store list` gives the age of each cache, so a stale answer looks stale.
 
