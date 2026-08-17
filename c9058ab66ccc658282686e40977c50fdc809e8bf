@@ -1,0 +1,31 @@
+fresh-eyes: independent cold reviewer (subagent, no authorship of this branch), full scope of the four commits moving Repo onto the mdstore capability.
+
+Verdict LAND, given on 74a43b4. This tip is c9058ab, the same four
+commits rebased onto another session's comment-only change to the gate
+script. git diff between the two tips shows scripts/merge-gate.sh and
+nothing else.
+
+Two rounds. Round one returned DO-NOT-LAND on five items. The blocker
+was a regression this branch introduced: opening the handle in
+Repo::open made every command fail on a store whose note directory is
+absent, which is any clone made before the first note. Four guards had
+no test, and two of them together deleted a file outside the store.
+
+Round two verified each fix by execution against a merge-base binary.
+The absent-directory cases now match the merge base exactly. The
+arbitrary delete is closed at resolve_id, which matched an exact id
+with Path::exists and so followed a planted link; the reviewer
+confirmed the hole did not move, checking every route downstream of
+resolve_id and the slug generator.
+
+Two mutations still survive the suite, and the reviewer verified that
+each is honest redundancy rather than a gap: with resolve_id confined,
+neither the id guard nor the confined delete is reachable alone.
+
+39 tests, clippy clean, fmt clean, missouri 25 passed 0 failed, 70
+steps, 1078 assertions.
+
+Follow-ups recorded, none blocking: hold the handle lazily, which
+closes a read-only corner and takes a mkdir off read commands; assert
+the id guard's in-store half, an empty id and a dot name, which the
+handle cannot refuse; drop a dead exists() probe in find_note.
