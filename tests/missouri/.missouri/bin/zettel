@@ -2,6 +2,6 @@
 # The wrapper pins --user-config to a path that never exists, so the
 # machine's real ~/.config/mdstore/config.yml cannot leak a root-store
 # fallback into the suite. The flag's last occurrence wins, so a test
-# that needs a config passes its own.
-REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
-exec "$REPO_ROOT/target/debug/zettel" --user-config /nonexistent-missouri-user-config.yml "$@"
+# that needs a config passes its own. It execs a copied binary, made by
+# the setup, so a mid-run write to target/ cannot become a self-exec.
+exec "$(dirname "$0")/zettel-bin" --user-config /nonexistent-missouri-user-config.yml "$@"

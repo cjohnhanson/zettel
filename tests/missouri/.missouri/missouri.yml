@@ -1,6 +1,10 @@
 setup:
   - name: "build zettel"
     command: "cargo build --quiet --manifest-path ../../Cargo.toml"
+  # The committed bin/zettel wrapper execs this copy, so nothing that
+  # touches target/ mid-run can turn the wrapper into a self-exec loop.
+  - name: "copy zettel binary"
+    command: "cp ../../target/debug/zettel .missouri/bin/zettel-bin && chmod +x .missouri/bin/zettel-bin"
 
 packages:
   - jq
