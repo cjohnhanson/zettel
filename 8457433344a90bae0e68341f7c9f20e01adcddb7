@@ -1,0 +1,6 @@
+fresh-eyes: not applicable, and said so rather than faked.
+
+One commit touching only .tisket/: the issue file this session opened.
+No source, no test, no guard, so no mutation to apply. The gate's
+header names this as the claim-check limit; this is the honest case of
+it. Read by the author only.
