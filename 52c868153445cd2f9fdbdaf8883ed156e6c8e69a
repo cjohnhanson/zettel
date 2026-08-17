@@ -1,0 +1,1 @@
+fresh-eyes: subagent review of the user-config feature, 2 rounds ending ready-to-merge; all six findings fixed and verified by exercise (seam-governed store root, serializer-safe save, docs, rootless --home refusal, one error shape, unchanged case). Rebased onto the confined-store migration; suite green at 26 paths, 1094 assertions on the landed pin.
