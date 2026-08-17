@@ -1,0 +1,8 @@
+doc: |
+  Terminal: the --home write landed in the root store, and the work
+  cwd still has no store of its own.
+assertions:
+  - name: "the root store holds the filed note"
+    command: "zettel --root rootstore note list | grep -q 'Filed from work'"
+  - name: "the work directory gained no store"
+    command: "test ! -f work/zettel.yml"

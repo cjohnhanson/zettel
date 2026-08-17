@@ -27,3 +27,9 @@ rmcp = { version = "3", features = ["server", "transport-io", "transport-streama
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "signal", "net"] }
 axum = "0.8"
 sigpipe = "0.1.3"
+
+# DEVELOPMENT ONLY — removed before push: the user-config work spans
+# mdstore and this tool; the patch reads the sibling worktree until the
+# mdstore commit is pushed and the rev pin bumped.
+[patch."https://github.com/cjohnhanson/mdstore"]
+mdstore = { path = "/Users/codyhanson/Projects/.wt/mdstore-eikj" }
