@@ -168,11 +168,11 @@ Run `zettel docs` to read the same documentation from the binary.
 
 ## Related
 
-- [tisket](https://github.com/cjohnhanson/tisket) — file-based issue tracker
-- [almanac](https://github.com/cjohnhanson/almanac) — agent skill aggregator
-- [belmont](https://github.com/cjohnhanson/belmont) — secrets manager for LLM agents
-- [mdstore](https://github.com/cjohnhanson/mdstore) — frontmattered markdown library this is built on
-- [codelikecody](https://github.com/cjohnhanson/codelikecody) — workflow engine that bundles these
+- [tisket](https://github.com/cjohnhanson/tisket) — issue tracker. Markdown issues with YAML frontmatter, in the repository
+- [almanac](https://github.com/cjohnhanson/almanac) — agent skill index, over pluggable sources
+- [gaff](https://github.com/cjohnhanson/gaff) — context-lifecycle handler for coding agents
+- [missouri](https://github.com/cjohnhanson/missouri) — end-to-end tests as directed graphs of filesystem states
+- [mdstore](https://github.com/cjohnhanson/mdstore) — the frontmattered markdown library zettel stores notes with
 
 ## License
 
