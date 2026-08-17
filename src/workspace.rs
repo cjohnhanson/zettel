@@ -622,27 +622,24 @@ impl Workspace {
         let Ok(dir) = mdstore::store::document_dir(root.as_std_path(), &dir_name) else {
             return findings;
         };
-        let Ok(entries) = std::fs::read_dir(&dir) else {
+        // The walk goes through the handle, like every other reader.
+        // A link planted among the notes is skipped by type, and the
+        // scan records why, so check can name it.
+        let Ok(store) = mdstore::confined::StoreDir::open(&dir) else {
             return findings;
         };
-        let mut paths: Vec<std::path::PathBuf> = entries
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("md"))
-            .filter(|p| mdstore::store::is_regular_file(p))
-            .collect();
-        paths.sort();
-        for path in paths {
-            let Ok(text) = std::fs::read_to_string(&path) else {
+        let Ok(scan) = store.scan("") else {
+            return findings;
+        };
+        let mut stems: Vec<String> = scan.entries.into_iter().map(|e| e.stem).collect();
+        stems.sort();
+        for stem in stems {
+            let Ok(text) = store.read(&format!("{stem}.md")) else {
                 continue;
             };
             if let Err(e) = crate::note::parse_note(&text) {
                 findings.push(crate::BrokenLink {
-                    source_id: path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("")
-                        .to_string(),
+                    source_id: stem.clone(),
                     source_title: "unparseable".to_string(),
                     target: e.to_string(),
                     location: "frontmatter".to_string(),
