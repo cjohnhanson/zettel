@@ -1,0 +1,37 @@
+fresh-eyes: independent cold reviewer (subagent, no authorship of this branch), full scope of the branch holding the note handle lazily.
+
+Verdict LAND, given on 8357972. This tip is bfbc746, one commit past
+it, adding a comment and nothing else; git diff between the two shows
+only comment lines in src/repo.rs.
+
+Two rounds. Round one returned DO-NOT-LAND on four items. The blocker
+was a comment I wrote claiming the anti-swap property was unchanged
+when deferring the open had deferred the containment check with it; a
+five-line probe listed a note from outside the store. Also: every open
+failure swallowed, so a mode-000 note directory read as an empty store
+with exit 0; two stale comments; OnceCell cost Repo its Sync.
+
+Round two verified each by execution. The swap probe now errors. The
+common case stayed quiet: a virgin store lists empty at exit 0, and a
+mode-000 store errors at exit 1, checked through the CLI.
+
+Mutations, each killed by a named test: N3 drop the containment
+recheck, killed by a_note_directory_swapped_after_open_is_not_followed;
+N4 restore the blanket swallow, killed by
+an_unreadable_note_directory_is_an_error_not_an_empty_store; N5
+propagate absence too, killed by a_read_does_not_create_the_note_directory;
+N6 restore eager open and create, killed by the same; N9 drop the id
+guard, killed by an_id_that_spells_a_path_is_refused_before_it_reaches_the_store;
+N10 back to OnceCell, does not compile.
+
+The reviewer found the comparison inside notes() is not the swap guard;
+the ? on document_dir is. Mutating the comparison away left the swap
+test green. The added comment says so.
+
+43 tests, clippy clean, fmt clean, missouri 26 passed 0 failed, 72
+steps, 1094 assertions.
+
+Follow-ups, none blocking: notes_mut still creates the note directory
+through an ambient create_dir_all, so a symlinked zettel_dir gets one
+empty directory made outside the root before the write is refused;
+the handle cache is unpinned; Workspace::stats has its own swallow.
