@@ -1,5 +1,9 @@
 [package]
-name = "zettel"
+# The registry name. `zettel` there belongs to an unrelated project,
+# and a registry name is first-come and permanent. `[[bin]] name`
+# below keeps the typed command as `zettel`; only the install line
+# carries the qualified name.
+name = "zttl"
 version = "0.2.0"
 edition = "2024"
 description = "Zettelkasten note management on frontmattered markdown"
@@ -28,6 +32,18 @@ exclude = [
     ".editorconfig",
     "rust-toolchain.toml",
 ]
+
+# The import path stays `zettel`, so no source changes when the
+# registry name does.
+[lib]
+name = "zettel"
+
+# The command a user types stays `zettel`. A package name and a binary
+# name are independent, so only the install line carries the
+# qualified one.
+[[bin]]
+name = "zettel"
+path = "src/main.rs"
 
 [dependencies]
 camino = { version = "1", features = ["serde1"] }
