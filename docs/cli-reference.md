@@ -227,6 +227,13 @@ command that reaches the network. Every other command reads what the
 cache already holds, so an answer never changes because of a fetch that
 you did not ask for.
 
+Each store syncs on its own, and one failure never stops another. The
+command prints a line for each, then exits non-zero if any failed. A
+store fails when its source is unreachable, and also when its declared
+revision is absent from what arrived. A fetch that moved bytes is not
+a sync: without that second check the command reports success and the
+revision fails later, on a read.
+
 A git store keeps one bare clone for each URL, and its notes are read
 from git objects at the revision that each store declares. Two stores
 that pin different revisions of one URL therefore share one clone. The
