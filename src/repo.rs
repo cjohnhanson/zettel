@@ -121,6 +121,12 @@ impl Repo {
         if let Some(notes) = self.notes.get() {
             return Ok(notes);
         }
+        // The `?` is the swap guard: it reruns document_dir's
+        // containment check, which is what refuses a directory
+        // replaced by a link since open. The comparison below is not.
+        // document_dir joins lexically, so a swap on disk leaves this
+        // path identical; the comparison catches only a caller that
+        // rewrote config.zettel_dir after open, both fields being pub.
         let checked =
             mdstore::store::document_dir(self.root.as_std_path(), &self.config.zettel_dir)
                 .map_err(crate::provenance::from_mdstore)?;
