@@ -59,6 +59,13 @@ pub struct Repo {
     /// another store's notes under bare, unqualified ids, while the
     /// commands built on the loader reported an empty store.
     notes_dir: Utf8PathBuf,
+    /// The authority to read and write inside the note directory, and
+    /// nowhere else.
+    ///
+    /// A checked path is a check every caller must remember. A handle
+    /// is a check none of them can skip: the operating system refuses
+    /// a name that leaves the directory, whoever built it.
+    notes: mdstore::confined::StoreDir,
 }
 
 impl Repo {
@@ -72,16 +79,53 @@ impl Repo {
         // Resolve the directory once, here, through the one function
         // that decides containment. An accessor that joined the raw
         // configured value gave every caller an unguarded path.
-        let notes_dir =
-            mdstore::store::document_dir(root.as_std_path(), &config.zettel_dir)
-                .map_err(crate::provenance::from_mdstore)?;
+        let notes_dir = mdstore::store::document_dir(root.as_std_path(), &config.zettel_dir)
+            .map_err(crate::provenance::from_mdstore)?;
         let notes_dir = Utf8PathBuf::try_from(notes_dir)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let notes = mdstore::confined::StoreDir::open(notes_dir.as_std_path())
+            .map_err(crate::provenance::from_mdstore)?;
         Ok(Repo {
             root: root.to_owned(),
             config,
             notes_dir,
+            notes,
         })
+    }
+
+    /// Read one note through the handle.
+    ///
+    /// The caller passes the path it already built. The name is taken
+    /// back off it against the note directory, so a path that does not
+    /// sit inside the store is refused rather than read.
+    fn read_note_file(&self, path: &Utf8Path) -> Result<String> {
+        let rel = self.relative(path)?;
+        self.notes
+            .read(&rel)
+            .map_err(crate::provenance::from_mdstore)
+    }
+
+    /// Write one note through the handle.
+    fn write_note_file(&self, path: &Utf8Path, contents: &str) -> Result<()> {
+        let rel = self.relative(path)?;
+        self.notes
+            .write(&rel, contents)
+            .map_err(crate::provenance::from_mdstore)
+    }
+
+    fn relative(&self, path: &Utf8Path) -> Result<String> {
+        path.strip_prefix(&self.notes_dir)
+            .map(|rel| rel.as_str().to_string())
+            .map_err(|_| Error::NoteNotFound(path.to_string()))
+    }
+
+    /// Every note stem in this store, through the handle.
+    fn note_stems(&self) -> Result<Vec<String>> {
+        let scan = self
+            .notes
+            .scan("")
+            .map_err(crate::provenance::from_mdstore)?;
+        Ok(scan.entries.into_iter().map(|e| e.stem).collect())
     }
 
     pub fn zettel_dir(&self) -> Utf8PathBuf {
@@ -125,7 +169,7 @@ impl Repo {
         {
             let prefix_dash = format!("{input}-");
             let mut matches = Vec::new();
-            Self::scan_prefix_matches(&dir, &prefix_dash, &mut matches)?;
+            self.scan_prefix_matches(&prefix_dash, &mut matches)?;
             match matches.len() {
                 0 => {}
                 1 => return Ok(matches.into_iter().next().unwrap()),
@@ -135,7 +179,7 @@ impl Repo {
 
         // Slug match
         let mut slug_matches = Vec::new();
-        Self::scan_slug_matches(&dir, input, &mut slug_matches)?;
+        self.scan_slug_matches(input, &mut slug_matches)?;
         if slug_matches.len() == 1 {
             return Ok(slug_matches.into_iter().next().unwrap());
         }
@@ -143,82 +187,48 @@ impl Repo {
         Err(Error::NoteNotFound(input.into()))
     }
 
-    fn scan_prefix_matches(dir: &Utf8Path, prefix_dash: &str, out: &mut Vec<String>) -> Result<()> {
-        if !dir.exists() {
-            return Ok(());
-        }
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = Utf8PathBuf::try_from(entry.path())
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
-            {
-                let stem = path.file_stem().unwrap_or("");
-                if stem.starts_with(prefix_dash) && !out.contains(&stem.to_string()) {
-                    out.push(stem.to_string());
-                }
+    /// Note stems whose id begins with this prefix.
+    ///
+    /// The handle lists the directory, so a link planted among the
+    /// notes is skipped by type rather than resolved.
+    fn scan_prefix_matches(&self, prefix_dash: &str, out: &mut Vec<String>) -> Result<()> {
+        for stem in self.note_stems()? {
+            if stem.starts_with(prefix_dash) && !out.contains(&stem) {
+                out.push(stem);
             }
         }
         Ok(())
     }
 
-    fn scan_slug_matches(dir: &Utf8Path, slug: &str, out: &mut Vec<String>) -> Result<()> {
-        if !dir.exists() {
-            return Ok(());
-        }
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = Utf8PathBuf::try_from(entry.path())
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
+    /// Note stems whose slug matches, whatever their prefix.
+    fn scan_slug_matches(&self, slug: &str, out: &mut Vec<String>) -> Result<()> {
+        for stem in self.note_stems()? {
+            if let Some((_, file_slug)) = extract_prefix(&stem)
+                && file_slug == slug
+                && !out.contains(&stem)
             {
-                let stem = path.file_stem().unwrap_or("");
-                if let Some((_, file_slug)) = extract_prefix(stem)
-                    && file_slug == slug
-                    && !out.contains(&stem.to_string())
-                {
-                    out.push(stem.to_string());
-                }
+                out.push(stem);
             }
         }
         Ok(())
     }
 
     fn collect_existing_prefixes(&self) -> Result<Vec<String>> {
-        let dir = self.zettel_dir();
         let mut prefixes = Vec::new();
-        if !dir.exists() {
-            return Ok(prefixes);
-        }
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = Utf8PathBuf::try_from(entry.path())
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
+        for stem in self.note_stems()? {
+            if let Some((prefix, _)) = extract_prefix(&stem)
+                && !prefixes.iter().any(|p: &String| p == prefix)
             {
-                let stem = path.file_stem().unwrap_or("");
-                if let Some((prefix, _)) = extract_prefix(stem)
-                    && !prefixes.iter().any(|p: &String| p == prefix)
-                {
-                    prefixes.push(prefix.to_string());
-                }
+                prefixes.push(prefix.to_string());
             }
         }
         Ok(prefixes)
     }
 
     fn slug_exists(&self, slug: &str) -> Result<bool> {
-        let dir = self.zettel_dir();
-        if !dir.exists() {
-            return Ok(false);
-        }
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = Utf8PathBuf::try_from(entry.path())
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
+        for stem in self.note_stems()? {
             {
-                let stem = path.file_stem().unwrap_or("");
+                let stem = stem.as_str();
                 if let Some((_, file_slug)) = extract_prefix(stem) {
                     if file_slug == slug {
                         return Ok(true);
@@ -267,8 +277,7 @@ impl Repo {
         crate::provenance::resolve_spans(fm.provenance.as_deref(), body)?;
         crate::provenance::refuse_authored_stamps(body)?;
         let content = note::serialize_note(&fm, body);
-        mdstore::store::write_document(note_path.as_std_path(), &content)
-            .map_err(crate::provenance::from_mdstore)?;
+        self.write_note_file(&note_path, &content)?;
 
         Ok(id)
     }
@@ -281,17 +290,14 @@ impl Repo {
             return Ok(notes);
         }
 
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = Utf8PathBuf::try_from(entry.path())
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
+        for stem in self.note_stems()? {
             {
-                let id = path.file_stem().unwrap_or("").to_string();
+                let path = dir.join(format!("{stem}.md"));
+                let id = stem;
                 // One unreadable file must not take down a repo-wide
                 // command either. A single non-UTF-8 byte made list,
                 // search and read fail for the whole store.
-                let content = match mdstore::store::read_document(path.as_std_path()) {
+                let content = match self.read_note_file(&path) {
                     Ok(c) => c,
                     Err(e) => {
                         eprintln!("warning: skipping {id}: {e}");
@@ -348,8 +354,7 @@ impl Repo {
             return Err(Error::NoteNotFound(id.into()));
         }
 
-        let content = mdstore::store::read_document(path.as_std_path())
-            .map_err(crate::provenance::from_mdstore)?;
+        let content = self.read_note_file(&path)?;
         let (fm, body) = note::parse_note(&content)?;
         Ok(Note {
             id: resolved,
@@ -362,8 +367,7 @@ impl Repo {
         let n = self.find_note(id)?;
         let dir = self.zettel_dir();
         let note_path = dir.join(format!("{}.md", n.id));
-        let content = mdstore::store::read_document(note_path.as_std_path())
-            .map_err(crate::provenance::from_mdstore)?;
+        let content = self.read_note_file(&note_path)?;
         let (mut fm, mut body) = note::parse_note(&content)?;
 
         if let Some(new_title) = opts.title {
@@ -462,20 +466,22 @@ impl Repo {
         crate::provenance::resolve_spans(fm.provenance.as_deref(), &body)?;
         note::update_timestamp(&mut fm);
         let new_content = note::serialize_note(&fm, &body);
-        mdstore::store::write_document(note_path.as_std_path(), &new_content)
-            .map_err(crate::provenance::from_mdstore)?;
+        self.write_note_file(&note_path, &new_content)?;
         Ok(())
     }
 
     pub fn delete_note(&self, id: &str) -> Result<()> {
         let resolved = self.resolve_id(id)?;
-        let dir = self.zettel_dir();
-        let path = dir.join(format!("{resolved}.md"));
-        if !path.exists() {
+        let name = format!("{resolved}.md");
+        if !self.notes.is_document(&name) {
             return Err(Error::NoteNotFound(id.into()));
         }
-        std::fs::remove_file(&path)?;
-        Ok(())
+        // A delete goes through the handle for the same reason a read
+        // does. An id that is secretly a path cannot name a file
+        // outside the note directory.
+        self.notes
+            .remove(&name)
+            .map_err(crate::provenance::from_mdstore)
     }
 
     // -- Links & backlinks --
@@ -673,8 +679,7 @@ impl Repo {
     ) -> Result<usize> {
         let n = self.find_note(id)?;
         let note_path = self.zettel_dir().join(format!("{}.md", n.id));
-        let content = mdstore::store::read_document(note_path.as_std_path())
-            .map_err(crate::provenance::from_mdstore)?;
+        let content = self.read_note_file(&note_path)?;
         let (mut fm, body) = note::parse_note(&content)?;
 
         let mut raw =
@@ -752,11 +757,7 @@ impl Repo {
             stamp_default(d);
             fm.provenance = Some(d.to_string());
             note::update_timestamp(&mut fm);
-            mdstore::store::write_document(
-                note_path.as_std_path(),
-                &note::serialize_note(&fm, &body),
-            )
-            .map_err(crate::provenance::from_mdstore)?;
+            self.write_note_file(&note_path, &note::serialize_note(&fm, &body))?;
             return Ok(1);
         }
 
@@ -806,11 +807,7 @@ impl Repo {
             }
             let new_body = mdstore::provenance::render_spans(&raw);
             note::update_timestamp(&mut fm);
-            mdstore::store::write_document(
-                note_path.as_std_path(),
-                &note::serialize_note(&fm, &new_body),
-            )
-            .map_err(crate::provenance::from_mdstore)?;
+            self.write_note_file(&note_path, &note::serialize_note(&fm, &new_body))?;
         }
         Ok(stamped)
     }
@@ -827,21 +824,15 @@ impl Repo {
             return Ok(changes);
         }
         let status_key = yaml_serde::Value::String("status".into());
-        let mut paths: Vec<Utf8PathBuf> = Vec::new();
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = Utf8PathBuf::try_from(entry.path())
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if path.extension() == Some("md") && mdstore::store::is_regular_file(path.as_std_path())
-            {
-                paths.push(path);
-            }
-        }
+        let mut paths: Vec<Utf8PathBuf> = self
+            .note_stems()?
+            .into_iter()
+            .map(|stem| dir.join(format!("{stem}.md")))
+            .collect();
         paths.sort();
         for path in paths {
             let id = path.file_stem().unwrap_or("").to_string();
-            let content = mdstore::store::read_document(path.as_std_path())
-                .map_err(crate::provenance::from_mdstore)?;
+            let content = self.read_note_file(&path)?;
             let (mut fm, body) = note::parse_note(&content)?;
             let Some(status) = fm.extra.remove(&status_key) else {
                 continue;
@@ -852,8 +843,7 @@ impl Repo {
             } else {
                 MigrateAction::RemovedStatus
             };
-            mdstore::store::write_document(path.as_std_path(), &note::serialize_note(&fm, &body))
-                .map_err(crate::provenance::from_mdstore)?;
+            self.write_note_file(&path, &note::serialize_note(&fm, &body))?;
             changes.push((id, action));
         }
         Ok(changes)
@@ -1060,5 +1050,41 @@ impl Repo {
             });
         }
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A note id is caller text. It must not name a file outside the
+    /// note directory, whatever it spells.
+    #[test]
+    fn a_note_id_cannot_name_a_file_outside_the_store() {
+        let base = std::env::temp_dir().join(format!("zettel-escape-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("store/.zettel")).unwrap();
+        std::fs::write(base.join("store/zettel.yml"), "zettel_dir: .zettel\n").unwrap();
+        std::fs::write(base.join("secret.md"), "SECRET").unwrap();
+
+        let root = Utf8PathBuf::try_from(base.join("store")).unwrap();
+        let repo = Repo::open(&root).unwrap();
+
+        let outside = repo.zettel_dir().join("../../secret.md");
+        assert!(
+            repo.read_note_file(&outside).is_err(),
+            "a climbing note path was read"
+        );
+        assert!(
+            repo.write_note_file(&outside, "overwritten").is_err(),
+            "a climbing note path was written"
+        );
+        assert_eq!(
+            std::fs::read_to_string(base.join("secret.md")).unwrap(),
+            "SECRET",
+            "the file outside the store changed"
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
