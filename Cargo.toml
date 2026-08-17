@@ -34,7 +34,10 @@ camino = { version = "1", features = ["serde1"] }
 clap = { version = "4", features = ["derive", "env", "unicode", "wrap_help"] }
 clap_complete = "4"
 clap_mangen = "0.2"
-mdstore = { git = "https://github.com/cjohnhanson/mdstore", rev = "376040b", features = ["mcp"] }
+# The registry name is mdstore-core; `package` keeps the import path
+# as `mdstore`, so no source in this crate changes. A path override
+# for local work belongs in .cargo/config.toml, never here.
+mdstore = { version = "0.3", package = "mdstore-core", features = ["mcp"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 yaml_serde = "0.10"
