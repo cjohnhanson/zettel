@@ -39,3 +39,22 @@ assertions:
       ! zettel --user-config bad.yml note list >/dev/null 2>&1 &&
       zettel --user-config bad.yml note list 2>&1 | grep -q 'has no zettel.yml' &&
       rm bad.yml
+  - name: "store root shows, refuses a markerless dir, and writes the seam"
+    command: |
+      zettel --user-config cfg.yml store root | grep -q 'root_store:' &&
+      ! zettel --user-config cfg.yml store root work >/dev/null 2>&1 &&
+      zettel --user-config cfg.yml store root work 2>&1 | grep -q 'no zettel.yml' &&
+      cp cfg.yml seam.yml &&
+      mkdir -p other && (cd other && zettel init >/dev/null) &&
+      ! zettel --user-config seam.yml store root other >/dev/null 2>&1 &&
+      zettel --user-config seam.yml store root other --force >/dev/null &&
+      grep -q "$PWD/other" seam.yml &&
+      ! grep -q "$PWD/other" cfg.yml &&
+      rm -rf other seam.yml
+  - name: "store root with the same path reports unchanged"
+    command: "cp cfg.yml seam2.yml && zettel --user-config seam2.yml store root rootstore | grep -q 'unchanged' && rm seam2.yml"
+  - name: "--home on a rootless command is refused, not ignored"
+    command: "! zettel --user-config cfg.yml --home init >/dev/null 2>&1 && zettel --user-config cfg.yml --home init 2>&1 | grep -q 'does not apply'"
+  - name: "--home with --root is a usage error"
+    command: "zettel --user-config cfg.yml --home --root rootstore note list"
+    should_fail: true

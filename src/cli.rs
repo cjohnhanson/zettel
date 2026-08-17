@@ -469,6 +469,11 @@ pub fn run(args: Args) -> crate::Result<()> {
     // Rootless commands never resolve a store, so `zettel prime` and
     // `zettel store root` work from any cwd with no config at all.
     let Some(intent) = intent(&args.command) else {
+        if args.home {
+            return Err(crate::Error::Io(std::io::Error::other(
+                "--home does not apply to this command; it names the root store for reads and writes",
+            )));
+        }
         if let Command::Store(StoreArgs {
             command: StoreCommand::Root(a),
         }) = args.command
@@ -495,7 +500,7 @@ pub fn run(args: Args) -> crate::Result<()> {
         &config,
         VOCAB,
     )
-    .map_err(|e| crate::Error::Store(e.to_string()))?;
+    .map_err(|e| crate::Error::Io(std::io::Error::other(e.to_string())))?;
     let root = Utf8PathBuf::from_path_buf(resolved.root)
         .map_err(|p| crate::Error::Store(format!("non-UTF-8 root {}", p.display())))?;
     announce(&root, &cwd, resolved.via, intent);
@@ -521,7 +526,7 @@ fn load_user_config(
         Some(p) => mdstore::userconfig::UserConfig::load_from(p.as_std_path()),
         None => mdstore::userconfig::UserConfig::load(),
     };
-    loaded.map_err(|e| crate::Error::Store(e.to_string()))
+    loaded.map_err(|e| crate::Error::Io(std::io::Error::other(e.to_string())))
 }
 
 /// One stderr line whenever the answer to "where did that act" is not
@@ -557,7 +562,7 @@ fn run_store_root(
     args: &StoreRootArgs,
     user_config: Option<&camino::Utf8Path>,
 ) -> crate::Result<()> {
-    let err = |m: String| crate::Error::Store(m);
+    let err = |m: String| crate::Error::Io(std::io::Error::other(m));
     let config = load_user_config(user_config)?;
     let Some(path) = &args.path else {
         match config.root_store {
@@ -593,16 +598,24 @@ fn run_store_root(
             );
         }
     }
+    if config.root_store.as_deref() == Some(abs.as_std_path()) {
+        println!("root_store: {abs} (unchanged)");
+        return Ok(());
+    }
     let old = config.root_store.clone();
-    let written = mdstore::userconfig::UserConfig::save_root(abs.as_std_path())
+    let target = user_config
+        .map(|p| p.as_std_path().to_path_buf())
+        .or_else(mdstore::userconfig::config_path)
+        .ok_or_else(|| err("no home directory resolves".to_string()))?;
+    mdstore::userconfig::UserConfig::save_root_to(&target, abs.as_std_path())
         .map_err(|e| err(e.to_string()))?;
     match old {
         Some(o) => println!(
             "root_store: {} -> {abs} ({})",
             o.display(),
-            written.display()
+            target.display()
         ),
-        None => println!("root_store: {abs} ({})", written.display()),
+        None => println!("root_store: {abs} ({})", target.display()),
     }
     Ok(())
 }

@@ -36,8 +36,9 @@ agent cannot see in a transcript, and a repository can set one through
 direnv or mise. The config path itself is fixed, and the home directory
 comes from the passwd database, not `$HOME`, for the same reason.
 
-Every write prints its resolved target on stderr unless `--root` was
-passed. A read resolved by walking or by fallback prints its source.
+A write prints its resolved target on stderr unless the target is the
+working directory's own store or `--root` named it. A read resolved by
+walking or by fallback prints its source.
 
 ## Commands
 
