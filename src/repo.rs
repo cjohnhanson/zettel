@@ -72,9 +72,11 @@ pub struct Repo {
     /// command. A read has no business making one, and through a
     /// symlinked note directory the mkdir landed outside the store.
     ///
-    /// Held once opened, so the anti-swap property is unchanged: the
-    /// directory is resolved one time and the handle is reused.
-    notes: std::cell::OnceCell<mdstore::confined::StoreDir>,
+    /// One handle, held: once opened it is reused, so a root swapped
+    /// afterwards cannot redirect a later call. The containment check
+    /// moves with the open rather than staying in `open`, because a
+    /// check that runs long before the open guards nothing.
+    notes: std::sync::OnceLock<mdstore::confined::StoreDir>,
 }
 
 impl Repo {
@@ -95,16 +97,13 @@ impl Repo {
         // A store whose note directory does not exist yet is an empty
         // store, not a broken one. git tracks no empty directory, so a
         // clone made before the first note has none, and opening the
-        // handle eagerly made list, check and stats all fail where
-        // they used to answer.
-        //
-        // The directory is created only when it is absent, so a store
-        // that already has one is never written to by a read.
+        // handle here made list, check and stats all fail where they
+        // used to answer.
         Ok(Repo {
             root: root.to_owned(),
             config,
             notes_dir,
-            notes: std::cell::OnceCell::new(),
+            notes: std::sync::OnceLock::new(),
         })
     }
 
@@ -112,9 +111,21 @@ impl Repo {
     ///
     /// A caller that reads gets an error when the directory is absent;
     /// a caller that writes creates it first through `notes_mut`.
+    ///
+    /// Containment is decided here, not only in `open`. Deferring the
+    /// open defers the check with it: a note directory replaced by a
+    /// link between `open` and the first read would otherwise be
+    /// followed, and the window is the whole of `Workspace::open`,
+    /// which walks every dependency store.
     fn notes(&self) -> Result<&mdstore::confined::StoreDir> {
         if let Some(notes) = self.notes.get() {
             return Ok(notes);
+        }
+        let checked =
+            mdstore::store::document_dir(self.root.as_std_path(), &self.config.zettel_dir)
+                .map_err(crate::provenance::from_mdstore)?;
+        if checked != self.notes_dir.as_std_path() {
+            return Err(Error::NoteNotFound(self.notes_dir.to_string()));
         }
         let notes = mdstore::confined::StoreDir::open(self.notes_dir.as_std_path())
             .map_err(crate::provenance::from_mdstore)?;
@@ -175,10 +186,16 @@ impl Repo {
     /// Every note stem in this store, through the handle.
     fn note_stems(&self) -> Result<Vec<String>> {
         // A store with no note directory yet holds no notes. That is
-        // an empty store, not a failure, and every reader says so.
-        let Ok(notes) = self.notes() else {
+        // an empty store, not a failure.
+        //
+        // Only absence is swallowed. A directory that exists and
+        // cannot be opened is a fault: a mode-000 note directory
+        // reported an empty list with a success status, so a person
+        // whose notes vanished got no signal at all.
+        if !self.notes_dir.exists() {
             return Ok(Vec::new());
-        };
+        }
+        let notes = self.notes()?;
         let scan = notes.scan("").map_err(crate::provenance::from_mdstore)?;
         Ok(scan.entries.into_iter().map(|e| e.stem).collect())
     }
@@ -312,7 +329,6 @@ impl Repo {
         let prefix = generate_prefix(&existing_prefixes);
         let id = format!("{prefix}-{slug}");
 
-        // Repo::open holds the directory open, so it exists.
         let dir = self.zettel_dir();
         let note_path = dir.join(format!("{id}.md"));
 
@@ -1218,6 +1234,96 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&base);
         let _ = std::fs::remove_dir_all(&plain);
+    }
+
+    /// Deferring the open defers the containment check with it.
+    ///
+    /// Repo::open decided containment, then the handle opened at an
+    /// arbitrary later time. A note directory replaced by a link in
+    /// between was followed, and the window is the whole of
+    /// Workspace::open, which walks every dependency store.
+    #[test]
+    fn a_note_directory_swapped_after_open_is_not_followed() {
+        let base = fixture("swapafter");
+        std::fs::create_dir_all(base.join("store/.zettel")).unwrap();
+        std::fs::create_dir_all(base.join("elsewhere")).unwrap();
+        std::fs::write(base.join("store/zettel.yml"), "zettel_dir: .zettel\n").unwrap();
+        std::fs::write(
+            base.join("store/.zettel/aaaa-inside.md"),
+            "---\ntitle: Inside\n---\n\nbody\n",
+        )
+        .unwrap();
+        std::fs::write(
+            base.join("elsewhere/bbbb-outside.md"),
+            "---\ntitle: Outside\n---\n\nbody\n",
+        )
+        .unwrap();
+
+        let root = Utf8PathBuf::try_from(base.join("store")).unwrap();
+        let repo = Repo::open(&root).unwrap();
+
+        // No read yet, so the handle is unopened. Swap the directory
+        // for a link out of the store.
+        std::fs::remove_dir_all(base.join("store/.zettel")).unwrap();
+        std::os::unix::fs::symlink(base.join("elsewhere"), base.join("store/.zettel")).unwrap();
+
+        let ids: Vec<String> = repo
+            .list_notes(&ListNotesFilter::default())
+            .map(|v| v.into_iter().map(|n| n.id).collect())
+            .unwrap_or_default();
+        assert!(
+            !ids.iter().any(|i| i == "bbbb-outside"),
+            "a note from outside the store was listed: {ids:?}"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A directory that cannot be read is a fault, not an empty store.
+    ///
+    /// Swallowing every open failure reported zero notes with a
+    /// success status, so a person whose notes vanished got no signal.
+    #[test]
+    fn an_unreadable_note_directory_is_an_error_not_an_empty_store() {
+        let base = fixture("unreadable");
+        std::fs::create_dir_all(base.join("store/.zettel")).unwrap();
+        std::fs::write(base.join("store/zettel.yml"), "zettel_dir: .zettel\n").unwrap();
+        std::fs::write(
+            base.join("store/.zettel/aaaa-real.md"),
+            "---\ntitle: Real\n---\n\nbody\n",
+        )
+        .unwrap();
+
+        let root = Utf8PathBuf::try_from(base.join("store")).unwrap();
+        let repo = Repo::open(&root).unwrap();
+        assert_eq!(
+            repo.list_notes(&ListNotesFilter::default()).unwrap().len(),
+            1
+        );
+
+        let dir = base.join("store/.zettel");
+        let mut perms = std::fs::metadata(&dir).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o000);
+        std::fs::set_permissions(&dir, perms).unwrap();
+
+        // A fresh Repo, so the handle is not already cached.
+        let repo = Repo::open(&root).unwrap();
+        let listed = repo.list_notes(&ListNotesFilter::default());
+        let mut perms = std::fs::metadata(&dir).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+        std::fs::set_permissions(&dir, perms).unwrap();
+
+        assert!(
+            listed.is_err(),
+            "an unreadable note directory listed as an empty store"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The MCP server holds a Repo across threads.
+    #[test]
+    fn a_repo_stays_shareable_between_threads() {
+        fn assert_sync<T: Sync>() {}
+        assert_sync::<Repo>();
     }
 
     /// The id guard and the handle are two lines of defence. Removing
