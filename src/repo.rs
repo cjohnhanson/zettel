@@ -83,8 +83,23 @@ impl Repo {
             .map_err(crate::provenance::from_mdstore)?;
         let notes_dir = Utf8PathBuf::try_from(notes_dir)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        let notes = mdstore::confined::StoreDir::open(notes_dir.as_std_path())
-            .map_err(crate::provenance::from_mdstore)?;
+        // A store whose note directory does not exist yet is an empty
+        // store, not a broken one. git tracks no empty directory, so a
+        // clone made before the first note has none, and opening the
+        // handle eagerly made list, check and stats all fail where
+        // they used to answer.
+        //
+        // The directory is created only when it is absent, so a store
+        // that already has one is never written to by a read.
+        let notes = match mdstore::confined::StoreDir::open(notes_dir.as_std_path()) {
+            Ok(notes) => notes,
+            Err(_) if !notes_dir.exists() => {
+                std::fs::create_dir_all(&notes_dir)?;
+                mdstore::confined::StoreDir::open(notes_dir.as_std_path())
+                    .map_err(crate::provenance::from_mdstore)?
+            }
+            Err(e) => return Err(crate::provenance::from_mdstore(e)),
+        };
         Ok(Repo {
             root: root.to_owned(),
             config,
@@ -95,11 +110,13 @@ impl Repo {
 
     /// Read one note through the handle.
     ///
-    /// The caller passes the path it already built. The name is taken
-    /// back off it against the note directory, so a path that does not
-    /// sit inside the store is refused rather than read.
+    /// The caller passes the path it already built, and the name is
+    /// taken back off it against the note directory. The strip is
+    /// bookkeeping, not a guard: Utf8Path::join is lexical, so a path
+    /// built from an escaping id strips cleanly back to the escaping
+    /// name. The handle is what refuses it.
     fn read_note_file(&self, path: &Utf8Path) -> Result<String> {
-        let rel = self.relative(path)?;
+        let rel = self.relative(path);
         self.notes
             .read(&rel)
             .map_err(crate::provenance::from_mdstore)
@@ -107,16 +124,24 @@ impl Repo {
 
     /// Write one note through the handle.
     fn write_note_file(&self, path: &Utf8Path, contents: &str) -> Result<()> {
-        let rel = self.relative(path)?;
+        let rel = self.relative(path);
         self.notes
             .write(&rel, contents)
             .map_err(crate::provenance::from_mdstore)
     }
 
-    fn relative(&self, path: &Utf8Path) -> Result<String> {
-        path.strip_prefix(&self.notes_dir)
-            .map(|rel| rel.as_str().to_string())
-            .map_err(|_| Error::NoteNotFound(path.to_string()))
+    /// The name of a path inside the note directory.
+    ///
+    /// Every caller builds its path by joining onto the note
+    /// directory, so the strip always succeeds. A path from anywhere
+    /// else is passed through whole and the handle refuses it, which
+    /// is the same answer by a shorter road. Returning a Result here
+    /// invited a NoteNotFound for what would be a containment failure.
+    fn relative(&self, path: &Utf8Path) -> String {
+        path.strip_prefix(&self.notes_dir).map_or_else(
+            |_| path.as_str().to_string(),
+            |rel| rel.as_str().to_string(),
+        )
     }
 
     /// Every note stem in this store, through the handle.
@@ -154,10 +179,10 @@ impl Repo {
             return Err(Error::NoteNotFound(input.to_string()));
         }
 
-        let dir = self.zettel_dir();
-
-        // Exact match
-        if dir.join(format!("{input}.md")).exists() {
+        // Exact match. Through the handle, because Path::exists
+        // follows a link: a link planted at <id>.md resolved to an id
+        // that list and scan both refuse to show.
+        if self.notes.is_document(&format!("{input}.md")) {
             return Ok(input.to_string());
         }
 
@@ -254,8 +279,8 @@ impl Repo {
         let prefix = generate_prefix(&existing_prefixes);
         let id = format!("{prefix}-{slug}");
 
+        // Repo::open holds the directory open, so it exists.
         let dir = self.zettel_dir();
-        std::fs::create_dir_all(&dir)?;
         let note_path = dir.join(format!("{id}.md"));
 
         let mut fm = note::new_frontmatter(title);
@@ -285,10 +310,6 @@ impl Repo {
     pub fn list_notes(&self, filter: &ListNotesFilter<'_>) -> Result<Vec<Note>> {
         let dir = self.zettel_dir();
         let mut notes = Vec::new();
-
-        if !dir.exists() {
-            return Ok(notes);
-        }
 
         for stem in self.note_stems()? {
             {
@@ -820,9 +841,6 @@ impl Repo {
     pub fn migrate(&self) -> Result<Vec<(String, MigrateAction)>> {
         let dir = self.zettel_dir();
         let mut changes = Vec::new();
-        if !dir.exists() {
-            return Ok(changes);
-        }
         let status_key = yaml_serde::Value::String("status".into());
         let mut paths: Vec<Utf8PathBuf> = self
             .note_stems()?
@@ -1086,5 +1104,128 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A store whose note directory does not exist yet is empty, not
+    /// broken. git tracks no empty directory, so a clone made before
+    /// the first note has none.
+    #[test]
+    fn a_store_with_no_note_directory_yet_still_opens() {
+        let base = fixture("absent");
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::write(base.join("zettel.yml"), "zettel_dir: notes\n").unwrap();
+        let root = Utf8PathBuf::try_from(base.clone()).unwrap();
+
+        let repo = Repo::open(&root).expect("a store with no notes yet must open");
+        assert!(
+            repo.list_notes(&ListNotesFilter::default())
+                .unwrap()
+                .is_empty()
+        );
+        repo.create_note("First", CreateNoteOptions::default())
+            .expect("the first note must still be creatable");
+        assert_eq!(
+            repo.list_notes(&ListNotesFilter::default()).unwrap().len(),
+            1
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The id guard and the handle are two lines of defence. Removing
+    /// either alone left the whole suite green, and removing both let
+    /// `note delete ../../outside/secret` remove a file outside the
+    /// store. Each is asserted here on its own.
+    #[test]
+    fn an_id_that_spells_a_path_is_refused_before_it_reaches_the_store() {
+        let (base, repo) = store_with_one_note("idguard");
+        for bad in ["../../secret", "/etc/passwd", "..", ".", "a/b", ""] {
+            assert!(repo.resolve_id(bad).is_err(), "{bad} resolved to a note id");
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_delete_cannot_remove_a_file_outside_the_store() {
+        let (base, repo) = store_with_one_note("delguard");
+        std::fs::write(base.join("secret.md"), "SECRET").unwrap();
+
+        for bad in ["../../secret", "../secret", "/etc/hosts"] {
+            assert!(repo.delete_note(bad).is_err(), "{bad} was deleted");
+        }
+        assert_eq!(
+            std::fs::read_to_string(base.join("secret.md")).unwrap(),
+            "SECRET",
+            "a file outside the store was removed"
+        );
+
+        // The name goes through the handle even when the id guard is
+        // not what refuses it: a plain stem naming nothing is a miss,
+        // and the real note still deletes.
+        assert!(repo.delete_note("nosuchnote").is_err());
+        assert!(repo.delete_note("aaaa-real").is_ok());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A link planted among the notes is not a note. It must not be
+    /// listed, must not resolve, and must not be deleted through
+    /// zettel, whatever it points at.
+    #[test]
+    fn a_planted_link_is_never_listed_resolved_or_deleted() {
+        let (base, repo) = store_with_one_note("planted");
+        std::fs::write(base.join("secret.md"), "SECRET").unwrap();
+        std::os::unix::fs::symlink(
+            base.join("secret.md"),
+            base.join("store/.zettel/aaaa-planted.md"),
+        )
+        .unwrap();
+
+        let ids: Vec<String> = repo
+            .list_notes(&ListNotesFilter::default())
+            .unwrap()
+            .into_iter()
+            .map(|n| n.id)
+            .collect();
+        assert_eq!(ids, vec!["aaaa-real".to_string()], "a link was listed");
+        assert!(repo.resolve_id("aaaa-planted").is_err(), "a link resolved");
+        // By slug and by prefix too. These go through the scan rather
+        // than the exact-match test, so they are what covers the
+        // scan's own type filter.
+        assert!(
+            repo.resolve_id("planted").is_err(),
+            "a link resolved by slug"
+        );
+        assert!(
+            repo.resolve_id("aaaa").is_ok(),
+            "the real note stopped resolving by prefix"
+        );
+        assert!(
+            repo.delete_note("aaaa-planted").is_err(),
+            "a link was deleted"
+        );
+        assert_eq!(
+            std::fs::read_to_string(base.join("secret.md")).unwrap(),
+            "SECRET"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    fn fixture(tag: &str) -> std::path::PathBuf {
+        let base = std::env::temp_dir().join(format!("zettel-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        base
+    }
+
+    fn store_with_one_note(tag: &str) -> (std::path::PathBuf, Repo) {
+        let base = fixture(tag);
+        std::fs::create_dir_all(base.join("store/.zettel")).unwrap();
+        std::fs::write(base.join("store/zettel.yml"), "zettel_dir: .zettel\n").unwrap();
+        std::fs::write(
+            base.join("store/.zettel/aaaa-real.md"),
+            "---\ntitle: Real\n---\n\nbody\n",
+        )
+        .unwrap();
+        let root = Utf8PathBuf::try_from(base.join("store")).unwrap();
+        let repo = Repo::open(&root).unwrap();
+        (base, repo)
     }
 }

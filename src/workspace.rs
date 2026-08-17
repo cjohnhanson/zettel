@@ -623,8 +623,10 @@ impl Workspace {
             return findings;
         };
         // The walk goes through the handle, like every other reader.
-        // A link planted among the notes is skipped by type, and the
-        // scan records why, so check can name it.
+        // A link planted among the notes is skipped by dirent type
+        // rather than followed. The scan also records why it skipped,
+        // which this function discards; the skipped-file finding a
+        // reader sees in check output comes from the loader.
         let Ok(store) = mdstore::confined::StoreDir::open(&dir) else {
             return findings;
         };
@@ -779,5 +781,45 @@ impl Workspace {
     /// case, which must behave exactly as it did before composition.
     pub fn is_single_store(&self) -> bool {
         self.snapshot.graph.members.len() == 1
+    }
+}
+
+#[cfg(test)]
+mod check_tests {
+    use super::*;
+
+    /// The check walk reads the note directory itself, so a link
+    /// planted there is a file it must not read through. The walk is
+    /// the diagnostic command: it has to survive the corruption it
+    /// reports, without following it.
+    #[test]
+    fn the_check_walk_does_not_read_through_a_planted_link() {
+        let base = std::env::temp_dir().join(format!("zettel-checkwalk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("store/.zettel")).unwrap();
+        std::fs::write(base.join("store/zettel.yml"), "zettel_dir: .zettel\n").unwrap();
+        std::fs::write(
+            base.join("store/.zettel/aaaa-real.md"),
+            "---\ntitle: Real\n---\n\nbody\n",
+        )
+        .unwrap();
+        // Not parseable as a note, so reading it through would produce
+        // a finding naming it.
+        std::fs::write(base.join("secret.md"), "SECRET, and not a note").unwrap();
+        std::os::unix::fs::symlink(
+            base.join("secret.md"),
+            base.join("store/.zettel/aaaa-planted.md"),
+        )
+        .unwrap();
+
+        let root = Utf8PathBuf::try_from(base.join("store")).unwrap();
+        let ws = Workspace::open(&root).unwrap();
+        let findings = ws.check(&root);
+
+        assert!(
+            !findings.iter().any(|f| f.source_id == "aaaa-planted"),
+            "the walk read through a planted link"
+        );
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
