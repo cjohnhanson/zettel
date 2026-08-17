@@ -3,12 +3,31 @@ transitions:
     command: "zettel init"
     target: "../initialized"
 
-# The stderr checks grep instead of matching the whole stream: the nix
-# sandbox wrapper prepends a deprecation warning to stderr.
+  # The user-level fallback scenario: a root store beside a storeless
+  # work directory, bound by a config file the commands name with
+  # --user-config so the real user config never participates.
+  - name: "configure a root store"
+    command: |
+      mkdir -p rootstore work/src &&
+      (cd rootstore && zettel init >/dev/null &&
+        zettel note create 'Root note' -p human:test -b 'In the root.' >/dev/null) &&
+      printf 'format: 1\nroot_store: %s/rootstore\n' "$PWD" > cfg.yml
+    target: "../fallback-configured"
+    comparators:
+      files:
+        - path: "rootstore/"
+          ignore: true
+        - path: "work/"
+          ignore: true
+        - path: "cfg.yml"
+          ignore: true
+
+# The stderr checks grep instead of matching the whole stream: the
+# message names the cwd, which differs on every run.
 assertions:
-  - name: "note list fails before init"
-    command: "! zettel note list >/dev/null 2>&1 && zettel note list 2>&1 >/dev/null | grep -q 'error: not a zettel repository (zettel.yml not found)'"
+  - name: "note list fails before init and names the fix"
+    command: "! zettel note list >/dev/null 2>&1 && zettel note list 2>&1 >/dev/null | grep -q 'no zettel.yml at or above' && zettel note list 2>&1 >/dev/null | grep -q 'store root <path>'"
   - name: "backlinks fails before init"
-    command: "! zettel backlinks foo >/dev/null 2>&1 && zettel backlinks foo 2>&1 >/dev/null | grep -q 'error: not a zettel repository (zettel.yml not found)'"
+    command: "! zettel backlinks foo >/dev/null 2>&1 && zettel backlinks foo 2>&1 >/dev/null | grep -q 'no zettel.yml at or above'"
   - name: "orphans fails before init"
-    command: "! zettel orphans >/dev/null 2>&1 && zettel orphans 2>&1 >/dev/null | grep -q 'error: not a zettel repository (zettel.yml not found)'"
+    command: "! zettel orphans >/dev/null 2>&1 && zettel orphans 2>&1 >/dev/null | grep -q 'no zettel.yml at or above'"

@@ -1,0 +1,41 @@
+doc: |
+  The user-level fallback. A cwd with no store reads the configured
+  root store and says so; a write refuses and names --home; --home
+  writes to the root. Every command passes --user-config so the real
+  ~/.config/mdstore/config.yml never participates.
+transitions:
+  - name: "a note lands in the root only through --home"
+    command: |
+      cd work/src &&
+      zettel --user-config ../../cfg.yml --home note create 'Filed from work' -p human:test -b 'Via home.' >/dev/null 2>&1 &&
+      cd ../.. && zettel --root rootstore note list | grep -q 'Filed from work' &&
+      echo HOME_OK
+    target: "../root-written-via-home"
+    stdout: "HOME_OK\n"
+    comparators:
+      files:
+        - path: "rootstore/"
+          ignore: true
+        - path: "cfg.yml"
+          ignore: true
+        - path: "work/"
+          ignore: true
+assertions:
+  - name: "a read from a storeless cwd falls back and announces it"
+    command: "cd work/src && zettel --user-config ../../cfg.yml note list 2>err.txt >out.txt && grep -q 'reading root store' err.txt && grep -q 'Root note' out.txt && rm err.txt out.txt"
+  - name: "a write from a storeless cwd refuses and names --home"
+    command: "cd work/src && ! zettel --user-config ../../cfg.yml note create nope -p human:test >/dev/null 2>&1 && zettel --user-config ../../cfg.yml note create nope -p human:test 2>&1 | grep -q -- '--home'"
+  - name: "with no config the read fails naming both facts"
+    command: "cd work/src && ! zettel --user-config ../../absent.yml note list >/dev/null 2>&1 && zettel --user-config ../../absent.yml note list 2>&1 | grep -q 'store root <path>'"
+  - name: "an explicit --root never falls back"
+    command: "! zettel --user-config cfg.yml --root work note list >/dev/null 2>&1"
+  - name: "a subdirectory of a store resolves it by walking"
+    command: "cd rootstore && mkdir -p src/deep && cd src/deep && zettel --user-config ../../../cfg.yml note list 2>err.txt | grep -q 'Root note' && grep -q 'using store at' err.txt && rm err.txt && cd .. && rmdir deep && cd .. && rmdir src"
+  - name: "--home with no config names the fix"
+    command: "cd work/src && ! zettel --user-config ../../absent.yml --home note list >/dev/null 2>&1 && zettel --user-config ../../absent.yml --home note list 2>&1 | grep -q 'store root <path>'"
+  - name: "a config whose root has no store is an error, not unconfigured"
+    command: |
+      printf 'format: 1\nroot_store: %s/work\n' "$PWD" > bad.yml &&
+      ! zettel --user-config bad.yml note list >/dev/null 2>&1 &&
+      zettel --user-config bad.yml note list 2>&1 | grep -q 'has no zettel.yml' &&
+      rm bad.yml

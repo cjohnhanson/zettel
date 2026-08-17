@@ -10,12 +10,74 @@ pub const ABOUT: &str = "Zettelkasten note management on frontmattered markdown"
 #[derive(Parser)]
 #[command(name = "zettel", version, about = ABOUT, max_term_width = 98)]
 pub struct Args {
-    /// The root directory of the repository. The default is the current directory.
-    #[arg(long, global = true, default_value = ".")]
-    pub root: Utf8PathBuf,
+    /// Store directory. Literal: the directory must hold zettel.yml;
+    /// no walk, no fallback. Without it, the nearest zettel.yml at or
+    /// above the cwd is used; with none, reads use the configured root
+    /// store and a write needs --home.
+    #[arg(long, global = true)]
+    pub root: Option<Utf8PathBuf>,
+
+    /// Act on the configured root store (`zettel store root`),
+    /// wherever the command runs.
+    #[arg(long, global = true, conflicts_with = "root")]
+    pub home: bool,
+
+    /// Read the user config from this file instead of its fixed path.
+    /// A test seam; a flag is visible where an env var is not. The last
+    /// occurrence wins, so a wrapper can pin a default that a specific
+    /// call still overrides.
+    #[arg(long, global = true, hide = true, overrides_with = "user_config")]
+    pub user_config: Option<Utf8PathBuf>,
 
     #[command(subcommand)]
     pub command: Command,
+}
+
+/// Whether a command needs a store at all, and whether it writes.
+/// Exhaustive on the leaf action, so a new subcommand does not compile
+/// until it is classified.
+fn intent(command: &Command) -> Option<mdstore::resolve::Intent> {
+    use mdstore::resolve::Intent::{Read, Write};
+    Some(match command {
+        // Rootless: these never resolve a store.
+        Command::Init
+        | Command::GenMan { .. }
+        | Command::GenCompletions { .. }
+        | Command::Prime
+        | Command::Docs(_)
+        | Command::Store(StoreArgs {
+            command: StoreCommand::Root(_),
+        }) => return None,
+        Command::Backlinks(_)
+        | Command::Orphans(_)
+        | Command::Search(_)
+        | Command::Read(_)
+        | Command::Context(_)
+        | Command::Stats(_)
+        | Command::Check
+        | Command::Store(StoreArgs {
+            command: StoreCommand::List(_),
+        }) => Read,
+        // A served store is a standing surface whose clients never see
+        // a fallback notice, so serve never falls back. Sync mutates
+        // the cache, and migrate rewrites notes.
+        Command::Serve(_)
+        | Command::Migrate
+        | Command::Store(StoreArgs {
+            command: StoreCommand::Sync,
+        }) => Write,
+        Command::Note(cmd) => match **cmd {
+            NoteCommand::List(_) | NoteCommand::Show(_) => Read,
+            NoteCommand::Review(ref a) => {
+                if a.approve.is_some() {
+                    Write
+                } else {
+                    Read
+                }
+            }
+            NoteCommand::Create(_) | NoteCommand::Edit(_) | NoteCommand::Delete(_) => Write,
+        },
+    })
 }
 
 #[derive(Parser)]
@@ -345,6 +407,19 @@ pub enum StoreCommand {
 
     /// Fetch the declared remote stores into the local cache
     Sync,
+
+    /// Show or set the root store that reads fall back to
+    Root(StoreRootArgs),
+}
+
+#[derive(Parser)]
+pub struct StoreRootArgs {
+    /// The directory of the root store. Without it, print the current
+    /// setting.
+    pub path: Option<Utf8PathBuf>,
+    /// Replace an already-set root with a different one.
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(Parser)]
@@ -374,33 +449,168 @@ pub fn prime() -> String {
     format!(
         "# zettel\n\
          {ABOUT}\n\
-         A note is a markdown file with frontmatter; notes link by [[id]]. A store is a \
-         directory of notes; --root <dir> names one; its stores.yml may declare others, \
-         linked as [[alias:id]]. Every span carries a provenance: human[:name], \
-         agent[:summary|index|inference], or citation[:source]. A span with none is unknown; \
-         unknown cannot become human. note review <id> --approve <all|N,N> stamps \
-         it reviewed.\n\
+         A note is frontmattered markdown; notes link by [[id]]. A store is a \
+         directory with zettel.yml, found upward from the cwd or via --root; with \
+         none, reads use the root store, writes need --home. stores.yml may declare \
+         others, read as [[alias:id]]. Spans carry provenance (human, \
+         agent[:qualifier], citation); an unmarked span is unknown; unknown \
+         cannot become human. note review <id> --approve <all|N,N> approves.\n\
          Commands:\n\
          \x20 zettel search <pattern>\n\
-         \x20 zettel read [--tag <t>] [--provenance <l>]\n\
+         \x20 zettel read [--tag <t>] [--provenance <p>]\n\
          \x20 zettel context <id>\n\
-         \x20 zettel note create <title> -t <tags> -p <origin[:qualifier]> -b <body>\n\
+         \x20 zettel note create <title> -t <tags> -p <orig[:qual]> -b <body>\n\
          \x20 zettel store list\n\
          More: zettel --help; zettel docs\n"
     )
 }
 
 pub fn run(args: Args) -> crate::Result<()> {
-    let root = if args.root.is_relative() {
-        let cwd = std::env::current_dir()?;
-        Utf8PathBuf::try_from(cwd)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
-            .join(&args.root)
-    } else {
-        args.root.clone()
+    // Rootless commands never resolve a store, so `zettel prime` and
+    // `zettel store root` work from any cwd with no config at all.
+    let Some(intent) = intent(&args.command) else {
+        if let Command::Store(StoreArgs {
+            command: StoreCommand::Root(a),
+        }) = args.command
+        {
+            return run_store_root(&a, args.user_config.as_deref());
+        }
+        // A rootless command acts on the literal --root when one is
+        // given (as `zettel --root dir init` always has), else the cwd.
+        let cwd = cwd_utf8()?;
+        let root = match &args.root {
+            Some(r) if r.is_relative() => cwd.join(r),
+            Some(r) => r.clone(),
+            None => cwd,
+        };
+        return run_command(&root, args.command);
     };
+    let cwd = cwd_utf8()?;
+    let config = load_user_config(args.user_config.as_deref())?;
+    let resolved = mdstore::resolve::resolve_root(
+        cwd.as_std_path(),
+        args.root.as_ref().map(|r| r.as_std_path()),
+        args.home,
+        intent,
+        &config,
+        VOCAB,
+    )
+    .map_err(|e| crate::Error::Store(e.to_string()))?;
+    let root = Utf8PathBuf::from_path_buf(resolved.root)
+        .map_err(|p| crate::Error::Store(format!("non-UTF-8 root {}", p.display())))?;
+    announce(&root, &cwd, resolved.via, intent);
+    run_command(&root, args.command)
+}
 
-    match args.command {
+const VOCAB: mdstore::resolve::Vocabulary<'static> = mdstore::resolve::Vocabulary {
+    marker: "zettel.yml",
+    noun: "store",
+    tool: "zettel",
+};
+
+fn cwd_utf8() -> crate::Result<Utf8PathBuf> {
+    let cwd = std::env::current_dir()?;
+    Ok(Utf8PathBuf::try_from(cwd)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?)
+}
+
+fn load_user_config(
+    path: Option<&camino::Utf8Path>,
+) -> crate::Result<mdstore::userconfig::UserConfig> {
+    let loaded = match path {
+        Some(p) => mdstore::userconfig::UserConfig::load_from(p.as_std_path()),
+        None => mdstore::userconfig::UserConfig::load(),
+    };
+    loaded.map_err(|e| crate::Error::Store(e.to_string()))
+}
+
+/// One stderr line whenever the answer to "where did that act" is not
+/// visible in the command line itself. A read found by walking or by
+/// fallback names its source; every write names its target.
+fn announce(
+    root: &camino::Utf8Path,
+    cwd: &camino::Utf8Path,
+    via: mdstore::resolve::Via,
+    intent: mdstore::resolve::Intent,
+) {
+    use mdstore::resolve::{Intent, Via};
+    match (intent, via) {
+        (_, Via::Flag) => {}
+        (Intent::Write, Via::Home) => eprintln!("zettel: writing to root store {root}"),
+        // A write into the cwd's own store is what the command line
+        // already says; only a target elsewhere needs naming.
+        (Intent::Write, _) if root != cwd => eprintln!("zettel: writing to store {root}"),
+        (Intent::Read, Via::Walk) if root != cwd => {
+            eprintln!("zettel: using store at {root} (zettel.yml above {cwd})");
+        }
+        (Intent::Read, Via::Config) => {
+            eprintln!("zettel: no zettel.yml at or above {cwd}; reading root store {root}");
+        }
+        (Intent::Read | Intent::Write, _) => {}
+    }
+}
+
+/// `zettel store root [<path>] [--force]`: show or set the root store
+/// in ~/.config/mdstore/config.yml. Rootless, and acts on its literal
+/// argument; resolution here would be circular.
+fn run_store_root(
+    args: &StoreRootArgs,
+    user_config: Option<&camino::Utf8Path>,
+) -> crate::Result<()> {
+    let err = |m: String| crate::Error::Store(m);
+    let config = load_user_config(user_config)?;
+    let Some(path) = &args.path else {
+        match config.root_store {
+            Some(r) => println!("root_store: {} (~/.config/mdstore/config.yml)", r.display()),
+            None => println!("root_store: unset"),
+        }
+        return Ok(());
+    };
+    let cwd = cwd_utf8()?;
+    let abs = if path.is_relative() {
+        cwd.join(path)
+    } else {
+        path.clone()
+    };
+    if !abs.join("zettel.yml").is_file() {
+        return Err(err(format!(
+            "no zettel.yml in {abs}; run `zettel init` there first"
+        )));
+    }
+    if let Some(old) = &config.root_store
+        && old != abs.as_std_path()
+        && !args.force
+    {
+        return Err(err(format!(
+            "root_store is {}; pass --force to change it to {abs}",
+            old.display()
+        )));
+    }
+    for sibling in ["tisket.yml", "almanac.yml"] {
+        if !abs.join(sibling).is_file() {
+            eprintln!(
+                "zettel: note: {abs} has no {sibling}; the other tools will not treat it as their root"
+            );
+        }
+    }
+    let old = config.root_store.clone();
+    let written = mdstore::userconfig::UserConfig::save_root(abs.as_std_path())
+        .map_err(|e| err(e.to_string()))?;
+    match old {
+        Some(o) => println!(
+            "root_store: {} -> {abs} ({})",
+            o.display(),
+            written.display()
+        ),
+        None => println!("root_store: {abs} ({})", written.display()),
+    }
+    Ok(())
+}
+
+/// Run a zettel subcommand against the given root directory.
+pub fn run_command(root: &camino::Utf8Path, command: Command) -> crate::Result<()> {
+    let root = root.to_path_buf();
+    match command {
         Command::Init => Repo::init(&root),
 
         Command::GenMan { dir } => {
@@ -709,6 +919,9 @@ pub fn run(args: Args) -> crate::Result<()> {
                     if failed {
                         std::process::exit(1);
                     }
+                }
+                StoreCommand::Root(_) => {
+                    unreachable!("store root is rootless and handled in run()")
                 }
                 StoreCommand::List(args) => {
                     let members = ws.store_members();

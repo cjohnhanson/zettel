@@ -14,11 +14,30 @@ Zettelkasten note management on frontmattered markdown.
 
 ## Global Options
 
-`--root <path>` — The root directory of the repository. The default is `.`, the current directory. This option applies to all subcommands.
+`--root <dir>` — Store directory, literal: the directory must hold `zettel.yml`; no walk, no fallback.
+
+`--home` — Act on the configured root store, wherever the command runs.
 
 `--version` — Print the version and exit.
 
 `--help` — Print the help and exit.
+
+## Root resolution
+
+Without `--root`, a command finds its store by one rule, identical in
+tisket and almanac: the nearest `zettel.yml` at or above the working
+directory wins. The walk requires a regular file and stops at the first
+directory the invoking user does not own, so a marker planted in a
+shared ancestor captures nothing. With no store found, a read falls
+back to the root store set in `~/.config/mdstore/config.yml` and says
+so on stderr; a write never falls back — it fails and names `--home`.
+No environment variable participates: an env var is the one input an
+agent cannot see in a transcript, and a repository can set one through
+direnv or mise. The config path itself is fixed, and the home directory
+comes from the passwd database, not `$HOME`, for the same reason.
+
+Every write prints its resolved target on stderr unless `--root` was
+passed. A read resolved by walking or by fallback prints its source.
 
 ## Commands
 
@@ -191,6 +210,14 @@ stores:
 
 A shared store declares an outside dependency by URL, because a path
 reaches only this machine.
+
+## `zettel store root`
+
+Show or set the root store that reads fall back to. `zettel store root`
+prints the current setting; `zettel store root <path>` writes it to
+`~/.config/mdstore/config.yml` (the path must hold `zettel.yml`;
+changing an existing setting needs `--force`). The file is shared with
+tisket and almanac, so one private repo serves all three tools.
 
 ## `zettel store sync`
 
