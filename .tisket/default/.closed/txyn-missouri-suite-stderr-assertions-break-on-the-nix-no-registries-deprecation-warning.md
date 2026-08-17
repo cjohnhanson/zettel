@@ -21,5 +21,5 @@ zettel's config was never wrong. packages: [jq] stays.
 A non-hermetic workaround (dropping packages, taking jq from PATH) was merged as #1 and is now reverted. Hermeticity is not a tradeable cost; a suite that takes its tools from the ambient PATH no longer tests what it claims to.
 
 The fix belongs in missouri and Cody has it in flight in another session. This suite stays red against the released missouri until that lands. No further change is needed here once it does.
-FIXED in missouri (codelikecody retire-clc-config): executor now passes --no-use-registries instead of the deprecated --no-registries, so no warning pollutes asserted stderr. The zettel suite passes 8/8 in full nix mode with the fixed binary. The system missouri stays stale until the pin bump + hms.
+FIXED in missouri: executor now passes --no-use-registries instead of the deprecated --no-registries, so no warning pollutes asserted stderr. The zettel suite passes 8/8 in full nix mode with the fixed binary. The system missouri stays stale until the pin bump + hms.
 Fixed in #3: the stderr assertions grep for the error line instead of exact-matching the stream, tolerating the nix wrapper warning while keeping the hermetic sandbox. Suite 21/21.
