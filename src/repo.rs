@@ -65,7 +65,16 @@ pub struct Repo {
     /// A checked path is a check every caller must remember. A handle
     /// is a check none of them can skip: the operating system refuses
     /// a name that leaves the directory, whoever built it.
-    notes: mdstore::confined::StoreDir,
+    ///
+    /// Opened on first use, not in `open`. Opening eagerly made every
+    /// command fail on a store whose note directory is absent, and
+    /// creating the directory to avoid that put a mkdir on a read
+    /// command. A read has no business making one, and through a
+    /// symlinked note directory the mkdir landed outside the store.
+    ///
+    /// Held once opened, so the anti-swap property is unchanged: the
+    /// directory is resolved one time and the handle is reused.
+    notes: std::cell::OnceCell<mdstore::confined::StoreDir>,
 }
 
 impl Repo {
@@ -91,21 +100,37 @@ impl Repo {
         //
         // The directory is created only when it is absent, so a store
         // that already has one is never written to by a read.
-        let notes = match mdstore::confined::StoreDir::open(notes_dir.as_std_path()) {
-            Ok(notes) => notes,
-            Err(_) if !notes_dir.exists() => {
-                std::fs::create_dir_all(&notes_dir)?;
-                mdstore::confined::StoreDir::open(notes_dir.as_std_path())
-                    .map_err(crate::provenance::from_mdstore)?
-            }
-            Err(e) => return Err(crate::provenance::from_mdstore(e)),
-        };
         Ok(Repo {
             root: root.to_owned(),
             config,
             notes_dir,
-            notes,
+            notes: std::cell::OnceCell::new(),
         })
+    }
+
+    /// The handle, opened on first use.
+    ///
+    /// A caller that reads gets an error when the directory is absent;
+    /// a caller that writes creates it first through `notes_mut`.
+    fn notes(&self) -> Result<&mdstore::confined::StoreDir> {
+        if let Some(notes) = self.notes.get() {
+            return Ok(notes);
+        }
+        let notes = mdstore::confined::StoreDir::open(self.notes_dir.as_std_path())
+            .map_err(crate::provenance::from_mdstore)?;
+        Ok(self.notes.get_or_init(|| notes))
+    }
+
+    /// The handle, creating the note directory if it is absent.
+    ///
+    /// Only a write calls this. A store with no note directory yet is
+    /// an empty store to every reader, and becomes a real one the
+    /// first time something is written.
+    fn notes_mut(&self) -> Result<&mdstore::confined::StoreDir> {
+        if !self.notes_dir.exists() {
+            std::fs::create_dir_all(&self.notes_dir)?;
+        }
+        self.notes()
     }
 
     /// Read one note through the handle.
@@ -117,7 +142,7 @@ impl Repo {
     /// name. The handle is what refuses it.
     fn read_note_file(&self, path: &Utf8Path) -> Result<String> {
         let rel = self.relative(path);
-        self.notes
+        self.notes()?
             .read(&rel)
             .map_err(crate::provenance::from_mdstore)
     }
@@ -125,7 +150,10 @@ impl Repo {
     /// Write one note through the handle.
     fn write_note_file(&self, path: &Utf8Path, contents: &str) -> Result<()> {
         let rel = self.relative(path);
-        self.notes
+        // A write creates the note directory when it is absent, so a
+        // store becomes real on its first note rather than on its
+        // first read.
+        self.notes_mut()?
             .write(&rel, contents)
             .map_err(crate::provenance::from_mdstore)
     }
@@ -146,10 +174,12 @@ impl Repo {
 
     /// Every note stem in this store, through the handle.
     fn note_stems(&self) -> Result<Vec<String>> {
-        let scan = self
-            .notes
-            .scan("")
-            .map_err(crate::provenance::from_mdstore)?;
+        // A store with no note directory yet holds no notes. That is
+        // an empty store, not a failure, and every reader says so.
+        let Ok(notes) = self.notes() else {
+            return Ok(Vec::new());
+        };
+        let scan = notes.scan("").map_err(crate::provenance::from_mdstore)?;
         Ok(scan.entries.into_iter().map(|e| e.stem).collect())
     }
 
@@ -182,7 +212,10 @@ impl Repo {
         // Exact match. Through the handle, because Path::exists
         // follows a link: a link planted at <id>.md resolved to an id
         // that list and scan both refuse to show.
-        if self.notes.is_document(&format!("{input}.md")) {
+        if self
+            .notes()
+            .is_ok_and(|n| n.is_document(&format!("{input}.md")))
+        {
             return Ok(input.to_string());
         }
 
@@ -371,9 +404,10 @@ impl Repo {
         let dir = self.zettel_dir();
         let path = dir.join(format!("{resolved}.md"));
 
-        if !path.exists() {
-            return Err(Error::NoteNotFound(id.into()));
-        }
+        // No exists() probe here. resolve_id already answered through
+        // the handle, so a second test adds nothing, and Path::exists
+        // follows a link, which is the predicate this whole surface
+        // replaced.
 
         let content = self.read_note_file(&path)?;
         let (fm, body) = note::parse_note(&content)?;
@@ -494,13 +528,13 @@ impl Repo {
     pub fn delete_note(&self, id: &str) -> Result<()> {
         let resolved = self.resolve_id(id)?;
         let name = format!("{resolved}.md");
-        if !self.notes.is_document(&name) {
+        if !self.notes().is_ok_and(|n| n.is_document(&name)) {
             return Err(Error::NoteNotFound(id.into()));
         }
         // A delete goes through the handle for the same reason a read
         // does. An id that is secretly a path cannot name a file
         // outside the note directory.
-        self.notes
+        self.notes()?
             .remove(&name)
             .map_err(crate::provenance::from_mdstore)
     }
@@ -1131,6 +1165,61 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 
+    /// A read must not create the note directory.
+    ///
+    /// Creating it eagerly put a mkdir on every command. Through a
+    /// symlinked note directory that mkdir landed outside the store,
+    /// because the containment check is skipped while the joined path
+    /// does not exist yet. A read that creates nothing cannot.
+    #[test]
+    fn a_read_does_not_create_the_note_directory() {
+        let base = fixture("noread");
+        std::fs::create_dir_all(base.join("store")).unwrap();
+        std::fs::create_dir_all(base.join("outside")).unwrap();
+        std::fs::write(base.join("store/zettel.yml"), "zettel_dir: link/notes\n").unwrap();
+        std::os::unix::fs::symlink(base.join("outside"), base.join("store/link")).unwrap();
+
+        let root = Utf8PathBuf::try_from(base.join("store")).unwrap();
+        let repo = Repo::open(&root).unwrap();
+        assert!(
+            repo.list_notes(&ListNotesFilter::default())
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            !base.join("outside/notes").exists(),
+            "a read created a directory outside the store"
+        );
+
+        // A plain store, no link. Still no directory from a read.
+        let plain = fixture("noread2");
+        std::fs::create_dir_all(plain.join("store")).unwrap();
+        std::fs::write(plain.join("store/zettel.yml"), "zettel_dir: notes\n").unwrap();
+        let root = Utf8PathBuf::try_from(plain.join("store")).unwrap();
+        let repo = Repo::open(&root).unwrap();
+        assert!(
+            repo.list_notes(&ListNotesFilter::default())
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            !plain.join("store/notes").exists(),
+            "a read created the note directory"
+        );
+
+        // A write creates it, which is where a store becomes real.
+        repo.create_note("First", CreateNoteOptions::default())
+            .unwrap();
+        assert!(plain.join("store/notes").is_dir());
+        assert_eq!(
+            repo.list_notes(&ListNotesFilter::default()).unwrap().len(),
+            1
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&plain);
+    }
+
     /// The id guard and the handle are two lines of defence. Removing
     /// either alone left the whole suite green, and removing both let
     /// `note delete ../../outside/secret` remove a file outside the
@@ -1138,7 +1227,21 @@ mod tests {
     #[test]
     fn an_id_that_spells_a_path_is_refused_before_it_reaches_the_store() {
         let (base, repo) = store_with_one_note("idguard");
-        for bad in ["../../secret", "/etc/passwd", "..", ".", "a/b", ""] {
+        // The empty id and a dot name are the guard's own work: both
+        // are inside the store, so the handle cannot refuse them. With
+        // the guard gone, `note delete ''` removes .zettel/.md and
+        // `note delete .hidden` removes .zettel/.hidden.md.
+        std::fs::write(base.join("store/.zettel/.hidden.md"), "dot").unwrap();
+        std::fs::write(base.join("store/.zettel/.md"), "empty").unwrap();
+        for bad in [
+            "../../secret",
+            "/etc/passwd",
+            "..",
+            ".",
+            "a/b",
+            "",
+            ".hidden",
+        ] {
             assert!(repo.resolve_id(bad).is_err(), "{bad} resolved to a note id");
         }
         let _ = std::fs::remove_dir_all(&base);
