@@ -64,3 +64,11 @@ rmcp = { version = "3", features = ["server", "transport-io", "transport-streama
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "signal", "net"] }
 axum = "0.8"
 sigpipe = "0.1.3"
+
+# A released binary carries no debug symbols, and a user installing a
+# CLI never reads them. Thin LTO with one codegen unit trades build
+# time for size and speed. A release builds once and installs often.
+[profile.release]
+strip = "symbols"
+lto = "thin"
+codegen-units = 1
