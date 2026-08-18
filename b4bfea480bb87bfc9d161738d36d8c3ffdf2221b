@@ -1,0 +1,16 @@
+Two cold reviewers read this branch and both returned SHIP.
+
+The substance was a suite assertion that encoded a superseded contract. mdstore's sync_source resolves the declared pin after fetching now, so a pin deleted upstream fails the sync rather than reporting success and failing later on a read. The suite still expected exit 0.
+
+The first reviewer tested the one thing that would have made this a cover-up rather than a fix: whether one broken pin stops every other store from syncing. It built a two-store workspace with the broken pin declared first and measured the opposite. Each store syncs on its own, one failure never stops another, and the command exits non-zero after the loop. The second reviewer repeated it against three declared stores and got the same result.
+
+The CLI reference said none of this. It described a fetch and gave no exit status while the neighbouring check entry gave its own. It says so now.
+
+signoff[fresh-eyes] PASS b4bfea4 read the commit against mdstore's sync_source and sync_all, confirmed the ssh assertion cited as precedent says what the change claims, drove store sync against three declared stores and measured independent failure with a non-zero exit, and ran the missouri suite green on the runner's own exit code
+signoff[mutation] PASS b4bfea4 mdstore's sync_source mutated so a missing pin returns Ok, this repo rebuilt against it, and the named assertion 'a fetch prunes a branch deleted upstream, and the sync then refuses' went red while every other path stayed green
+
+The tip moved after that review, by one commit that changes the gate's
+trigger. gaff main went red on the squash merge, because a squash
+writes a commit that no note names, so the post-merge run fails every
+time. The gate runs on a pull request only now. The reasoning and the
+trap it avoids are in gaff's tracker as f90z.
