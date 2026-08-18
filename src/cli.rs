@@ -510,7 +510,7 @@ pub fn run(args: Args) -> crate::Result<()> {
 const VOCAB: mdstore::resolve::Vocabulary<'static> = mdstore::resolve::Vocabulary {
     marker: "zettel.yml",
     noun: "store",
-    tool: "zettel",
+    tool: crate::TOOL,
 };
 
 fn cwd_utf8() -> crate::Result<Utf8PathBuf> {
@@ -524,7 +524,7 @@ fn load_user_config(
 ) -> crate::Result<mdstore::userconfig::UserConfig> {
     let loaded = match path {
         Some(p) => mdstore::userconfig::UserConfig::load_from(p.as_std_path()),
-        None => mdstore::userconfig::UserConfig::load(),
+        None => mdstore::userconfig::UserConfig::load(VOCAB.tool),
     };
     loaded.map_err(|e| crate::Error::Io(std::io::Error::other(e.to_string())))
 }
@@ -556,7 +556,7 @@ fn announce(
 }
 
 /// `zettel store root [<path>] [--force]`: show or set the root store
-/// in ~/.config/mdstore/config.yml. Rootless, and acts on its literal
+/// in ~/.config/zettel/config.yml. Rootless, and acts on its literal
 /// argument; resolution here would be circular.
 fn run_store_root(
     args: &StoreRootArgs,
@@ -565,9 +565,15 @@ fn run_store_root(
     let err = |m: String| crate::Error::Io(std::io::Error::other(m));
     let config = load_user_config(user_config)?;
     let Some(path) = &args.path else {
-        match config.root_store {
-            Some(r) => println!("root_store: {} (~/.config/mdstore/config.yml)", r.display()),
-            None => println!("root_store: unset"),
+        // The file that was read, never a literal: --user-config makes
+        // any fixed path a possible lie.
+        let read_from = user_config
+            .map(|p| p.as_std_path().to_path_buf())
+            .or_else(|| mdstore::userconfig::config_path(crate::TOOL));
+        match (&config.root_store, &read_from) {
+            (Some(r), Some(f)) => println!("root_store: {} ({})", r.display(), f.display()),
+            (Some(r), None) => println!("root_store: {}", r.display()),
+            (None, _) => println!("root_store: unset"),
         }
         return Ok(());
     };
@@ -605,7 +611,7 @@ fn run_store_root(
     let old = config.root_store.clone();
     let target = user_config
         .map(|p| p.as_std_path().to_path_buf())
-        .or_else(mdstore::userconfig::config_path)
+        .or_else(|| mdstore::userconfig::config_path(VOCAB.tool))
         .ok_or_else(|| err("no home directory resolves".to_string()))?;
     mdstore::userconfig::UserConfig::save_root_to(&target, abs.as_std_path())
         .map_err(|e| err(e.to_string()))?;
