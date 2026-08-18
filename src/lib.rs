@@ -31,7 +31,7 @@ pub use selector::Selector;
 mod tool_name_tests {
     /// The const is the directory this tool reads its config from. A wrong
     /// name reads another tool's file and fails nothing, because no test
-    /// reaches config_path with the real name: the end-to-end wrapper
+    /// reaches `config_path` with the real name: the end-to-end wrapper
     /// pins --user-config and the registry is set from the environment.
     /// So bind the name to the package instead.
     #[test]
