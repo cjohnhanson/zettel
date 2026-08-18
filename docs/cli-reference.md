@@ -29,7 +29,7 @@ tisket and almanac: the nearest `zettel.yml` at or above the working
 directory wins. The walk requires a regular file and stops at the first
 directory the invoking user does not own, so a marker planted in a
 shared ancestor captures nothing. With no store found, a read falls
-back to the root store set in `~/.config/mdstore/config.yml` and says
+back to the root store set in `~/.config/zettel/config.yml` and says
 so on stderr; a write never falls back — it fails and names `--home`.
 No environment variable participates: an env var is the one input an
 agent cannot see in a transcript, and a repository can set one through
@@ -216,9 +216,10 @@ reaches only this machine.
 
 Show or set the root store that reads fall back to. `zettel store root`
 prints the current setting; `zettel store root <path>` writes it to
-`~/.config/mdstore/config.yml` (the path must hold `zettel.yml`;
-changing an existing setting needs `--force`). The file is shared with
-tisket and almanac, so one private repo serves all three tools.
+`~/.config/zettel/config.yml` (the path must hold `zettel.yml`;
+changing an existing setting needs `--force`). Each tool reads its own
+file, so this one names the root store for zettel alone. One private repo
+can still serve all three, named once in each.
 
 ## `zettel store sync`
 
@@ -243,7 +244,7 @@ GET. `s3://` and `gs://` are refused.
 
 A shared store declares a dependency by URL. If the same repository is
 already checked out on this machine, bind it in
-`~/.config/mdstore/registry.yml`:
+`~/.config/zettel/registry.yml`:
 
 ```yaml
 stores:
