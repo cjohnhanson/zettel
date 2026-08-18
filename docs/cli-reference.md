@@ -217,8 +217,9 @@ reaches only this machine.
 Show or set the root store that reads fall back to. `zettel store root`
 prints the current setting; `zettel store root <path>` writes it to
 `~/.config/zettel/config.yml` (the path must hold `zettel.yml`;
-changing an existing setting needs `--force`). The file is shared with
-tisket and almanac, so one private repo serves all three tools.
+changing an existing setting needs `--force`). Each tool reads its own
+file, so this one names the root store for zettel alone. One private repo
+can still serve all three, named once in each.
 
 ## `zettel store sync`
 
