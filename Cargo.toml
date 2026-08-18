@@ -11,6 +11,26 @@ authors = ["Cody Hanson"]
 keywords = ["zettelkasten", "notes", "markdown", "knowledge-base", "mcp"]
 categories = ["command-line-utilities", "text-processing"]
 
+# Repository machinery belongs on GitHub. A consumer installing the
+# crate gets the source, the license, and the README.
+exclude = [
+    ".tisket/",
+    "tisket.yml",
+    ".zettel/",
+    "zettel.yml",
+    ".gaff/",
+    ".github/",
+    ".agents/",
+    "scripts/",
+    # Shells out to scripts/merge-gate.sh, which the line above drops.
+    "tests/merge_gate_guard.rs",
+    "tests/missouri/",
+    "CONTRIBUTING.md",
+    "AGENTS.md",
+    ".editorconfig",
+    "rust-toolchain.toml",
+]
+
 [dependencies]
 camino = { version = "1", features = ["serde1"] }
 clap = { version = "4", features = ["derive", "env", "unicode", "wrap_help"] }
