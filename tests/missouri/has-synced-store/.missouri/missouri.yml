@@ -85,10 +85,23 @@ assertions:
       printf 'stores:\n  - alias: hb\n    git: file://%s/upstream\n    rev: side\n' "$PWD" > pinned/stores.yml &&
       zettel --root pinned note show hb:later-entry --field title
     stdout: "Later entry\n"
-  - name: "a branch deleted upstream is pruned on the next sync"
+  # Upstream deletes the side branch. The next fetch prunes it, so the
+  # pin stops resolving and the sync refuses, the same as a sync that
+  # cannot reach its source. A fetch that moved bytes is not a sync.
+  #
+  # The deletion sits inside this assertion on purpose. One invocation
+  # then proves the whole chain: the fetch runs, the fetch prunes, and
+  # the sync refuses on a pin no other command removed.
+  #
+  # The message is matched by its two parts rather than as one string.
+  # mdstore's own test asserts the same way, so a reworded message
+  # fails there first rather than only here.
+  - name: "a fetch prunes a branch deleted upstream, and the sync then refuses"
     command: |
       (cd upstream && git branch -D side >/dev/null) &&
-      zettel --root pinned store sync >/dev/null &&
+      ! zettel --root pinned store sync >/dev/null 2>&1 &&
+      zettel --root pinned store sync 2>&1 | grep -q 'pin' &&
+      zettel --root pinned store sync 2>&1 | grep -q 'side' &&
       ! zettel --root pinned note show hb:later-entry >/dev/null 2>&1 &&
       zettel --root pinned store list | grep '^hb ' | grep -q 'unavailable'
   - name: "the tag pins still resolve after that fetch"
