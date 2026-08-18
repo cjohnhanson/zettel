@@ -14,6 +14,24 @@ plain text. Git tracks them. Zettel needs no external service.
 
 ## Install
 
+From the first published release onward:
+
+```sh
+cargo install zttl
+```
+
+The crate is `zttl` and the command is `zettel`. `zettel` on crates.io
+belongs to an unrelated project, and a registry name is first-come and
+permanent, so this crate took a free one. The command a person types
+did not change.
+
+A tagged release also carries a prebuilt binary for macOS and Linux,
+on x86-64 and arm64. Take the archive for your platform from the
+[releases page](https://github.com/cjohnhanson/zettel/releases) and
+put `zettel` on your `PATH`.
+
+To build from a checkout:
+
 ```sh
 cargo install --git https://github.com/cjohnhanson/zettel
 ```
