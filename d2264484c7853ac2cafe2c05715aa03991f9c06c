@@ -1,0 +1,16 @@
+fresh-eyes: independent review agent, not the author. Reviewer is an agent, not a human.
+
+Scope: the tool name becomes mdstore::ToolName, one const per repo, passed to Vocabulary.tool, UserConfig::load, userconfig::config_path and Registry::load. The mdstore pin moves to ea739c4, which carries the per-tool config path.
+
+Returned FIX FIRST across all three. Every finding is fixed in this commit.
+
+What it found. Two repositories carried a Cargo.lock that still pinned the old mdstore, so cargo metadata --locked exited 101 and the nix build would have failed while a plain cargo test rewrote the lockfile and looked green. Two missouri suites were red on one assertion, because the rev bump crosses mdstore 0ff1d22 and store sync now refuses a pin that vanished upstream; the fixture updates come from the sessions that diagnosed it, cherry-picked here. A documentation sentence in each repo still said the config file is shared with the other two tools, which this change makes false.
+
+Mutation, and it is the finding that mattered. The reviewer changed each const to another tool's name. All three survived: cargo and missouri stayed green in every repo. No test reached config_path or registry_path with the real name, because the end-to-end wrapper pins --user-config for every case and the registry resolves from the environment. A wrong name would have read another tool's config file and failed nothing.
+
+That hole is closed here. tool_name_tests::the_tool_name_is_the_package_name binds the const to env!(CARGO_PKG_NAME). Verified by re-applying the mutation: the guard fails with left == right on the two names, where the whole suite passed before.
+
+signoff[fresh-eyes] PASS read the diff cold in all three repositories, checked that crate name, binary name, marker file and const agree, searched for any remaining literal name or old library path, and ran every gate.
+signoff[mutation] PASS three mutations, one per repository, each changing the const to a sibling tool's name, all three surviving before the guard existed and the guard failing on the same mutation after.
+
+Not covered. The reviewer could not confirm the missouri regression against a build of origin/main, because that needs a cold dependency compile. The claim rests on mdstore commit ancestry and a hand reproduction of the changed exit code.
