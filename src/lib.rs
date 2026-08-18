@@ -1,3 +1,11 @@
+/// The name a user types, which is also the directory holding this
+/// tool's user config and registry. One home, so the config path and
+/// every message that names it cannot drift apart.
+pub const TOOL: mdstore::ToolName<'static> = match mdstore::ToolName::new("zettel") {
+    Some(t) => t,
+    None => panic!("the tool name must be one plain path component"),
+};
+
 pub mod cli;
 pub mod config;
 pub mod docs;

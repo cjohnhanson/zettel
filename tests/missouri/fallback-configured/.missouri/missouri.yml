@@ -2,7 +2,7 @@ doc: |
   The user-level fallback. A cwd with no store reads the configured
   root store and says so; a write refuses and names --home; --home
   writes to the root. Every command passes --user-config so the real
-  ~/.config/mdstore/config.yml never participates.
+  ~/.config/zettel/config.yml never participates.
 transitions:
   - name: "a note lands in the root only through --home"
     command: |
