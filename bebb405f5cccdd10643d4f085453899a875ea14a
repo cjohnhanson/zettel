@@ -1,0 +1,5 @@
+signoff[review-tests] PASS bebb405f5cccdd10643d4f085453899a875ea14a guard cases run the gate in a fixture; both reconciliation loops die under the reviewer mutation, and the suites are green
+signoff[review-docs] PASS bebb405f5cccdd10643d4f085453899a875ea14a the retired names are gone from every live prose surface, and each workflow states why its trigger is what it is
+signoff[review-code] PASS bebb405f5cccdd10643d4f085453899a875ea14a one config generates both workflows and gaff check reports no drift; the review check sits on the pull request and the push path carries the suites
+signoff[review-deps] PASS bebb405f5cccdd10643d4f085453899a875ea14a six skills vendored from cjohnhanson/skills at 031c5cf, content hashed, MIT into MIT, no package manifest changed
+signoff[review-usability] PASS bebb405f5cccdd10643d4f085453899a875ea14a a refusal names each missing review and the command that records it, measured against a fixture through five note shapes
