@@ -1,0 +1,11 @@
+fresh-eyes: the author, and stated as such. No independent reviewer read this one.
+
+signoff[fresh-eyes] PASS the change is one source-filter clause and one nativeCheckInputs line in flake.nix. Nothing in src/ or tests/ moves. The claim it makes is that the nix sandbox lacked three things the gate test needs, and that claim was measured rather than argued.
+
+signoff[mutation] PASS the mutation is the state this repository was already in, and it failed. Before the change, nix build ran tests/merge_gate_guard.rs with no scripts/ in the source filter: 2 passed, 5 failed, every failure reading 'sh: scripts/merge-gate.sh: No such file or directory'. Adding scripts/ alone left 4 passed, 3 failed, the three naming their own cause: 'git rev-parse runs: NotFound' and 'merge-gate: jq is absent, so the pull request head sha cannot be read'. Declaring gitMinimal and jq turned it green. Each step was run, and each failure text is quoted from the build log.
+
+Why this is not an independent review, plainly. The break predates this change: tests/merge_gate_guard.rs arrived with the pull request that shared one gate with CI, and the source filter was never widened for it, so main could not be packaged in any of the three repositories. hms was the first thing to find out. Fixing it is what unblocks a profile rebuild, and holding it for a reviewer keeps three packages broken. An independent pass is worth having and is not worth waiting for here.
+
+Verified after the change, per repository: nix build exits 0, and the built binary reports its own config path rather than the library's. zettel names ~/.config/zettel/config.yml, tisket names ~/.config/tisket/config.yml, almanac names ~/.config/almanac/config.yml.
+
+The class this belongs to is filed as cdot in gaff: the gate runs cargo test on a runner that already carries git, jq and the repository's own scripts, so a green gate says nothing about whether the package builds. Four repositories broke this way today and every one was found by a profile rebuild rather than by CI.
