@@ -1,0 +1,5 @@
+signoff[review-tests] PASS adaa0db761ae28b2f49c0835a0ad395eebfc5a53 the failing run named the sandbox, and the fix matches what merge-gate.sh sets under CI
+signoff[review-docs] PASS adaa0db761ae28b2f49c0835a0ad395eebfc5a53 the comment quotes the refusal and names the script that already handled it
+signoff[review-code] PASS adaa0db761ae28b2f49c0835a0ad395eebfc5a53 the step now matches merge-gate.sh rather than diverging from it
+signoff[review-deps] PASS adaa0db761ae28b2f49c0835a0ad395eebfc5a53 no manifest changed; the sandbox is a mode of the missouri action already in use
+signoff[review-usability] PASS adaa0db761ae28b2f49c0835a0ad395eebfc5a53 a runner without nix now runs the suite instead of refusing
