@@ -65,6 +65,13 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "sig
 axum = "0.8"
 sigpipe = "0.1.3"
 
+# The documentation set: the pages, and the `docs` subcommand over
+# them. The build half reads docs/ and carries no dependencies.
+diataxis = { version = "0.1", default-features = false, features = ["cli"] }
+
+[build-dependencies]
+diataxis = { version = "0.1", default-features = false, features = ["build"] }
+
 # A released binary carries no debug symbols, and a user installing a
 # CLI never reads them. Thin LTO with one codegen unit trades build
 # time for size and speed. A release builds once and installs often.

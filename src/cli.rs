@@ -142,14 +142,13 @@ pub enum Command {
     Prime,
 }
 
-#[derive(clap::Args)]
-pub struct DocsArgs {
-    /// The topic slug to show, or "search" to search the docs
-    pub topic: Option<String>,
+pub use diataxis::DocsArgs;
 
-    /// The search query. Use it when the topic is "search".
-    pub query: Option<String>,
-}
+/// This tool's own documentation, compiled in.
+///
+/// The build script embedded every page in `docs/`, so nothing here
+/// lists them and `zettel docs` works from any directory.
+static DOCS: &[(&str, &str)] = diataxis::embedded_docs!();
 
 #[derive(Parser)]
 pub enum NoteCommand {
@@ -1026,31 +1025,26 @@ pub fn run_command(root: &camino::Utf8Path, command: Command) -> crate::Result<(
             print!("{}", prime());
             Ok(())
         }
-        Command::Docs(args) => match args.topic.as_deref() {
-            None | Some("list") => {
-                crate::docs::list();
-                Ok(())
-            }
-            Some("search") => {
-                let query = args.query.as_deref().unwrap_or("");
-                crate::docs::search(query);
-                Ok(())
-            }
-            Some(slug) => {
-                if crate::docs::show(slug) {
+        Command::Docs(args) => {
+            let set = diataxis::DocSet::from_embedded(DOCS)
+                .map_err(|e| crate::Error::Io(std::io::Error::other(e.to_string())))?;
+            match args.request().and_then(|request| set.render(request)) {
+                Ok(text) => {
+                    print!("{text}");
                     Ok(())
-                } else {
-                    eprintln!("unknown doc: '{slug}'");
+                }
+                Err(e) => {
+                    eprintln!("{e}");
                     eprintln!();
                     eprintln!("available docs:");
-                    crate::docs::list();
+                    print!("{}", set.listing());
                     Err(crate::Error::Io(std::io::Error::new(
                         std::io::ErrorKind::NotFound,
-                        format!("doc '{slug}' not found"),
+                        e.to_string(),
                     )))
                 }
             }
-        },
+        }
 
         Command::Stats(a) => {
             Repo::open(&root)?;
