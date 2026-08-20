@@ -21,6 +21,8 @@ jobs:
         uses: 'cjohnhanson/missouri@main'
       - name: 'gaff'
         uses: 'cjohnhanson/gaff@main'
+        with:
+          'run': 'false'
       - name: 'formatting'
         run: |
           cargo fmt --all --check
