@@ -1,0 +1,21 @@
+{
+  "name": "zttl",
+  "description": "Zettelkasten note management on frontmattered markdown",
+  "bin": {
+    "zttl": "bin/run.js",
+    "zettel": "bin/run.js"
+  },
+  "files": [
+    "bin/run.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "optionalDependencies": {
+    "@zttl/cli-darwin-arm64": "0.0.0",
+    "@zttl/cli-darwin-x64": "0.0.0",
+    "@zttl/cli-linux-arm64-musl": "0.0.0",
+    "@zttl/cli-linux-x64-musl": "0.0.0"
+  }
+}
