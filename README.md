@@ -14,21 +14,32 @@ plain text. Git tracks them. Zettel needs no external service.
 
 ## Install
 
-From the first published release onward:
+Pick the line for a tool you already use. Every one installs the same
+binary. Each gives you both the `zettel` and `zttl` commands.
+
+Run it without installing:
+
+```sh
+uvx zttl
+npx zttl
+```
+
+Install it for good:
 
 ```sh
 cargo install zttl
+uv tool install zttl
+npm install -g zttl
+brew install cjohnhanson/tap/zettel
 ```
 
-The crate is `zttl` and the command is `zettel`. `zettel` on crates.io
-belongs to an unrelated project, and a registry name is first-come and
-permanent, so this crate took a free one. The command a person types
-did not change.
+The published name is `zttl`, because `zettel` was already taken on every registry.
+Both commands install together, so `zettel` is what you type.
 
-A tagged release also carries a prebuilt binary for macOS and Linux,
-on x86-64 and arm64. Take the archive for your platform from the
-[releases page](https://github.com/cjohnhanson/zettel/releases) and
-put `zettel` on your `PATH`.
+A tagged release also carries a prebuilt binary and the man page, for
+macOS and Linux on x86-64 and arm64. Take the archive for your platform
+from the [releases page](https://github.com/cjohnhanson/zettel/releases),
+put `zettel` on your `PATH`, and put `man/zettel.1` where `man` looks.
 
 To build from a checkout:
 
