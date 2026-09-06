@@ -1,9 +1,5 @@
 [package]
-# The registry name. `zettel` there belongs to an unrelated project,
-# and a registry name is first-come and permanent. `[[bin]] name`
-# below keeps the typed command as `zettel`; only the install line
-# carries the qualified name.
-name = "zttl"
+name = "zettel"
 version = "0.2.0"
 edition = "2024"
 description = "Zettelkasten note management on frontmattered markdown"
@@ -26,6 +22,8 @@ exclude = [
     ".github/",
     ".agents/",
     "scripts/",
+    # Shells out to scripts/merge-gate.sh, which the line above drops.
+    "tests/merge_gate_guard.rs",
     "tests/missouri/",
     "CONTRIBUTING.md",
     "AGENTS.md",
@@ -33,27 +31,23 @@ exclude = [
     "rust-toolchain.toml",
 ]
 
-# The import path stays `zettel`, so no source changes when the
-# registry name does.
-[lib]
-name = "zettel"
-
-# The command a user types stays `zettel`. A package name and a binary
-# name are independent, so only the install line carries the
-# qualified one.
+# Two names, one build. `zettel` is what a person types. `zttl` exists
+# because the registries that matter for `uvx` and `npx` needed a free
+# name, and maturin ties the installed command to the Cargo bin name.
 [[bin]]
 name = "zettel"
 path = "src/main.rs"
+
+[[bin]]
+name = "zttl"
+path = "src/bin/zttl.rs"
 
 [dependencies]
 camino = { version = "1", features = ["serde1"] }
 clap = { version = "4", features = ["derive", "env", "unicode", "wrap_help"] }
 clap_complete = "4"
 clap_mangen = "0.2"
-# The registry name is mdstore-core; `package` keeps the import path
-# as `mdstore`, so no source in this crate changes. A path override
-# for local work belongs in .cargo/config.toml, never here.
-mdstore = { version = "0.3", package = "mdstore-core", features = ["mcp"] }
+mdstore = { git = "https://github.com/cjohnhanson/mdstore", rev = "ea739c4", features = ["mcp"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 yaml_serde = "0.10"
@@ -64,18 +58,9 @@ rmcp = { version = "3", features = ["server", "transport-io", "transport-streama
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "signal", "net"] }
 axum = "0.8"
 sigpipe = "0.1.3"
-
-# The documentation set: the pages, and the `docs` subcommand over
-# them. The build half reads docs/ and carries no dependencies.
 diataxis = { version = "0.1", default-features = false, features = ["cli"] }
 
+# The docs pages are generated at build time from the same
+# documentation set the `docs` subcommand reads.
 [build-dependencies]
 diataxis = { version = "0.1", default-features = false, features = ["build"] }
-
-# A released binary carries no debug symbols, and a user installing a
-# CLI never reads them. Thin LTO with one codegen unit trades build
-# time for size and speed. A release builds once and installs often.
-[profile.release]
-strip = "symbols"
-lto = "thin"
-codegen-units = 1

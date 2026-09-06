@@ -56,7 +56,13 @@
               || (builtins.match ".*/docs$" path != null)
               || (builtins.match ".*/docs/.*" path != null)
               || (builtins.match ".*/skills$" path != null)
-              || (builtins.match ".*/skills/.*" path != null);
+              || (builtins.match ".*/skills/.*" path != null)
+              # tests/merge_gate_guard.rs runs scripts/merge-gate.sh, so the
+              # script has to reach the sandbox. Without it five of seven
+              # cases fail on a missing file and the package cannot build,
+              # while the gate stays green because a runner has the script.
+              || (builtins.match ".*/scripts$" path != null)
+              || (builtins.match ".*/scripts/.*" path != null);
           };
 
           commonArgs = {
@@ -90,6 +96,12 @@
               # Unit tests only in the nix check; the missouri suite runs in
               # development (it needs the missouri binary, which lives in its
               # own derivation).
+              # tests/merge_gate_guard.rs drives scripts/merge-gate.sh,
+              # which runs git and reads the event payload with jq. stdenv
+              # builds PATH from the declared inputs, so both have to be
+              # named here. A runner has them already, which is why the
+              # gate stays green while the package cannot build.
+              nativeCheckInputs = [ pkgs.gitMinimal pkgs.jq ];
               checkPhase = ''
                 tmpHome="$(mktemp -d)"
                 export HOME="$tmpHome"

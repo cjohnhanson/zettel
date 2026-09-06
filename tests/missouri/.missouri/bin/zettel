@@ -1,6 +1,6 @@
 #!/bin/sh
 # The wrapper pins --user-config to a path that never exists, so the
-# machine's real ~/.config/mdstore/config.yml cannot leak a root-store
+# machine's real ~/.config/zettel/config.yml cannot leak a root-store
 # fallback into the suite. The flag's last occurrence wins, so a test
 # that needs a config passes its own. It execs a copied binary, made by
 # the setup, so a mid-run write to target/ cannot become a self-exec.
