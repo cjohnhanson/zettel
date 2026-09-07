@@ -7,34 +7,34 @@
 // Nothing is downloaded at install time. There is no postinstall, so an
 // offline install, an air-gapped runner, and `--ignore-scripts` all work.
 const { platform, arch, env } = process;
-const { spawnSync, execSync } = require("child_process");
+const { spawnSync } = require("child_process");
 
-// `libc` in a platform package is a hint, and package managers disagree
-// about honouring it, so musl is detected here too.
-function isMusl() {
-  let stderr;
-  try {
-    stderr = execSync("ldd --version", { stdio: ["pipe", "pipe", "pipe"] });
-  } catch (err) {
-    stderr = err.stderr;
-  }
-  return String(stderr).indexOf("musl") > -1;
-}
-
+// The Linux binaries are static musl, which runs on a musl host and on
+// a glibc host alike. One Linux entry serves both, and no probe of the
+// host libc is needed.
 const PLATFORMS = {
   darwin: {
     arm64: "@zttl/cli-darwin-arm64/zettel",
     x64: "@zttl/cli-darwin-x64/zettel",
   },
-  "linux-musl": {
+  linux: {
     arm64: "@zttl/cli-linux-arm64-musl/zettel",
     x64: "@zttl/cli-linux-x64-musl/zettel",
   },
 };
 
-const key = platform === "linux" && isMusl() ? "linux-musl" : platform;
-const rel = env.ZTTL_BINARY ? null : PLATFORMS?.[key]?.[arch];
-const bin = env.ZTTL_BINARY || (rel && require.resolve(rel));
+const rel = env.ZTTL_BINARY ? null : PLATFORMS?.[platform]?.[arch];
+let bin = env.ZTTL_BINARY || null;
+if (!bin && rel) {
+  // A declared platform whose package did not install throws here.
+  // Unresolved is the same outcome as unsupported, so it takes the
+  // same message instead of a stack trace.
+  try {
+    bin = require.resolve(rel);
+  } catch {
+    bin = null;
+  }
+}
 
 if (!bin) {
   console.error(
