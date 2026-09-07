@@ -14,12 +14,8 @@ plain text. Git tracks them. Zettel needs no external service.
 
 ## Install
 
-Nothing is published yet. Every line below works from the first
-tagged release onward, and none of them works before it. To use the tool
-today, build it from a checkout with the last command in this section.
-
-Pick the line for a tool you already use. Every one installs the same
-binary. Each gives you both the `zettel` and `zttl` commands.
+There is no release yet, and no way to install this today. The commands
+below are what the first tagged release will provide. Each one fails now.
 
 Run it without installing:
 
@@ -34,22 +30,22 @@ Install it for good:
 cargo install zttl
 uv tool install zttl
 npm install -g zttl
-brew install cjohnhanson/tap/zettel
 ```
 
-The name to publish under is `zttl`, because `zettel` was already taken on every registry.
-Both commands install together, so `zettel` is what you type.
+Homebrew is not set up yet. No tap exists, and no release step builds
+one, so `brew install` will not work until that is built.
 
-A tagged release also carries a prebuilt binary and the man page, for
-macOS and Linux on x86-64 and arm64. Take the archive for your platform
-from the [releases page](https://github.com/cjohnhanson/zettel/releases),
-put `zettel` on your `PATH`, and put `man/zettel.1` where `man` looks.
+A tagged release will also carry a prebuilt binary and the man page, for
+macOS and Linux on x86-64 and arm64, on the
+[releases page](https://github.com/cjohnhanson/zettel/releases).
 
-To build from a checkout:
+Building from a checkout does not work either. This crate depends on two
+sibling crates that are not published, so `cargo install --git` cannot
+resolve them. Clone `mdstore` and `diataxis` beside this repository and
+point at them with a `[patch.crates-io]` section in `.cargo/config.toml`.
 
-```sh
-cargo install --git https://github.com/cjohnhanson/zettel
-```
+The name to publish under is `zttl`, because `zettel` was already
+taken. Both commands install together, so `zettel` is what you type.
 
 ## Usage
 
