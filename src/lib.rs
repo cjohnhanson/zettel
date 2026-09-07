@@ -28,13 +28,33 @@ pub use selector::Selector;
 
 #[cfg(test)]
 mod tool_name_tests {
-    /// The const is the directory this tool reads its config from. A wrong
-    /// name reads another tool's file and fails nothing, because no test
-    /// reaches `config_path` with the real name: the end-to-end wrapper
-    /// pins --user-config and the registry is set from the environment.
-    /// So bind the name to the package instead.
+    /// The const is the directory this tool reads its config from. A
+    /// wrong name reads another tool's file and fails nothing, because
+    /// no test reaches `config_path` with the real name: the end-to-end
+    /// wrapper pins --user-config and the registry is set from the
+    /// environment. So bind the name to something that cannot drift.
+    ///
+    /// Not the package name. The package publishes as a name that was
+    /// free on the registries, and the config directory must not follow
+    /// that rename: it would move every reader's config out from under
+    /// them. The command a person types is the right anchor, and
+    /// Cargo.toml names it.
     #[test]
-    fn the_tool_name_is_the_package_name() {
-        assert_eq!(super::TOOL.as_str(), env!("CARGO_PKG_NAME"));
+    fn the_tool_name_is_the_command_name() {
+        let manifest = include_str!("../Cargo.toml");
+        let mut lines = manifest.lines();
+        let bin = loop {
+            let Some(line) = lines.next() else {
+                panic!("Cargo.toml declares no [[bin]]");
+            };
+            if line.trim() == "[[bin]]" {
+                let name = lines
+                    .find(|l| l.trim_start().starts_with("name = "))
+                    .expect("a [[bin]] carries a name");
+                break name.split('"').nth(1).expect("a quoted name").to_string();
+            }
+        };
+        assert_eq!(super::TOOL.as_str(), bin);
+        assert_eq!(super::TOOL.as_str(), "zettel");
     }
 }
