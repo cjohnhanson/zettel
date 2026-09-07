@@ -4,6 +4,10 @@
 name = "zttl"
 version = "0.2.0"
 edition = "2024"
+# Edition 2024 needs 1.85. Without this line a consumer on an older
+# toolchain meets an edition error from inside this crate rather than a
+# version requirement it can act on.
+rust-version = "1.85"
 description = "Zettelkasten note management on frontmattered markdown"
 license = "MIT"
 repository = "https://github.com/cjohnhanson/zettel"
