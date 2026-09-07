@@ -14,6 +14,10 @@ plain text. Git tracks them. Zettel needs no external service.
 
 ## Install
 
+Nothing is published yet. Every line below works from the first
+tagged release onward, and none of them works before it. To use the tool
+today, build it from a checkout with the last command in this section.
+
 Pick the line for a tool you already use. Every one installs the same
 binary. Each gives you both the `zettel` and `zttl` commands.
 
@@ -33,7 +37,7 @@ npm install -g zttl
 brew install cjohnhanson/tap/zettel
 ```
 
-The published name is `zttl`, because `zettel` was already taken on every registry.
+The name to publish under is `zttl`, because `zettel` was already taken on every registry.
 Both commands install together, so `zettel` is what you type.
 
 A tagged release also carries a prebuilt binary and the man page, for
