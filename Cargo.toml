@@ -1,5 +1,7 @@
 [package]
-name = "zettel"
+# The registry name, because `zettel` is taken on crates.io, PyPI and
+# npm alike. The binary keeps the typed name; see [[bin]] below.
+name = "zttl"
 version = "0.2.0"
 edition = "2024"
 description = "Zettelkasten note management on frontmattered markdown"
@@ -40,6 +42,11 @@ exclude = [
 # Two names, one build. `zettel` is what a person types. `zttl` exists
 # because the registries that matter for `uvx` and `npx` needed a free
 # name, and maturin ties the installed command to the Cargo bin name.
+# The registry name differs from the name this crate's own source
+# imports. The lib keeps the imported name, so no `use` changes.
+[lib]
+name = "zettel"
+
 [[bin]]
 name = "zettel"
 path = "src/main.rs"
