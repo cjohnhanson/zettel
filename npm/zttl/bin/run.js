@@ -16,12 +16,12 @@ const os = require("os");
 // host libc is needed.
 const PLATFORMS = {
   darwin: {
-    arm64: "@zttl/cli-darwin-arm64/zettel",
-    x64: "@zttl/cli-darwin-x64/zettel",
+    arm64: "@cjohnhanson/zttl-darwin-arm64/zettel",
+    x64: "@cjohnhanson/zttl-darwin-x64/zettel",
   },
   linux: {
-    arm64: "@zttl/cli-linux-arm64-musl/zettel",
-    x64: "@zttl/cli-linux-x64-musl/zettel",
+    arm64: "@cjohnhanson/zttl-linux-arm64-musl/zettel",
+    x64: "@cjohnhanson/zttl-linux-x64-musl/zettel",
   },
 };
 

@@ -13,9 +13,9 @@
   },
   "license": "MIT",
   "optionalDependencies": {
-    "@zttl/cli-darwin-arm64": "0.0.0",
-    "@zttl/cli-darwin-x64": "0.0.0",
-    "@zttl/cli-linux-arm64-musl": "0.0.0",
-    "@zttl/cli-linux-x64-musl": "0.0.0"
+    "@cjohnhanson/zttl-darwin-arm64": "0.0.0",
+    "@cjohnhanson/zttl-darwin-x64": "0.0.0",
+    "@cjohnhanson/zttl-linux-arm64-musl": "0.0.0",
+    "@cjohnhanson/zttl-linux-x64-musl": "0.0.0"
   }
 }
