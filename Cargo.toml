@@ -40,8 +40,9 @@ exclude = [
     ".github/",
     ".agents/",
     "scripts/",
-    # Shells out to scripts/merge-gate.sh, which the line above drops.
+    # These run scripts/, which the line above drops.
     "tests/merge_gate_guard.rs",
+    "tests/prepublish_gate.rs",
     "tests/missouri/",
     "CONTRIBUTING.md",
     "AGENTS.md",

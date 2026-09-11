@@ -163,7 +163,7 @@ Show a note and the linked notes within N hops.
 
 ### `zettel search <pattern>`
 
-Search the notes with a regex pattern. Zettel matches the title, the tags, and the body.
+Search the notes with a regex pattern. Zettel matches the title, the tags, and the body. The pattern matches case; `(?i)` at the front turns that off.
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|

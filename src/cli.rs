@@ -12,7 +12,7 @@ pub const ABOUT: &str = "Zettelkasten note management on frontmattered markdown"
 pub struct Args {
     /// Store directory. Literal: the directory must hold zettel.yml;
     /// no walk, no fallback. Without it, the nearest zettel.yml at or
-    /// above the cwd is used; with none, reads use the configured root
+    /// above the cwd is used. With none, reads use the configured root
     /// store and a write needs --home.
     #[arg(long, global = true)]
     pub root: Option<Utf8PathBuf>,
@@ -99,9 +99,9 @@ pub enum Command {
         shell: clap_complete::Shell,
     },
 
-    /// Manage the notes. The variant is boxed because NoteCommand is
-    /// far larger than the other variants, and clippy flags the size
-    /// difference.
+    /// Manage the notes
+    // Boxed because NoteCommand is far larger than the other variants,
+    // and clippy flags the size difference.
     #[command(subcommand)]
     Note(Box<NoteCommand>),
 
@@ -332,7 +332,8 @@ pub struct BacklinksArgs {
 
 #[derive(Parser)]
 pub struct SearchArgs {
-    /// The search pattern. Regular expressions work.
+    /// The search pattern, a regular expression. It matches case; (?i)
+    /// at the front turns that off.
     pub pattern: String,
 
     /// The output format (text or json)
@@ -628,7 +629,11 @@ fn run_store_root(
 pub fn run_command(root: &camino::Utf8Path, command: Command) -> crate::Result<()> {
     let root = root.to_path_buf();
     match command {
-        Command::Init => Repo::init(&root),
+        Command::Init => {
+            Repo::init(&root)?;
+            println!("initialized a zettel store at {root}");
+            Ok(())
+        }
 
         Command::GenMan { dir } => {
             use clap::CommandFactory as _;
@@ -731,6 +736,7 @@ pub fn run_command(root: &camino::Utf8Path, command: Command) -> crate::Result<(
                 }
                 NoteCommand::Delete(a) => {
                     repo.delete_note(&a.id)?;
+                    println!("deleted {}", a.id);
                     Ok(())
                 }
                 NoteCommand::Review(a) => {

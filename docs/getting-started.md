@@ -61,8 +61,10 @@ zettel note list --unreviewed
 # Show one note
 zettel note show a3f2-connection-pooling-causes-stale-reads
 
-# Search the full text
-zettel search "connection pool"
+# Search the full text. The pattern is a regex and matches case;
+# (?i) at the front turns that off.
+zettel search "Connection pool"
+zettel search "(?i)stale reads"
 
 # Show all note content; pipe it to other tools
 zettel read
@@ -149,7 +151,8 @@ for an external source. Text outside the markers keeps the note default.
 3. `zettel note review <id>` shows the numbered spans.
 4. The human approves what they stand behind:
    `zettel note review <id> --approve all --reviewer <name>`, or
-   `--approve 2,4` for single spans. The approval writes a `reviewed=` stamp.
+   `--approve 1,3` for single spans, by the numbers the listing shows.
+   The approval writes a `reviewed=` stamp.
 5. A reader pulls trusted content with
    `zettel read --provenance human,citation,reviewed`.
 
