@@ -78,7 +78,7 @@ because the declaring machine can still resolve them.
 
 Use Zettel for design rationale, integration problems, and debugging notes.
 This material is too long for a code comment and too small for a doc page of
-its own, and it still matters enough to write down.
+its own. It still matters enough to write down.
 
 Agents create notes during work and label them with their provenance. Humans
 review the agent content and approve it.
