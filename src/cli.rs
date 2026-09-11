@@ -435,8 +435,7 @@ pub struct StatsArgs {
     pub format: OutputFormat,
 }
 
-/// Run Zettel with the given arguments.
-/// The prime: what zettel is, for an agent's context.
+/// What zettel is, for an agent's context.
 ///
 /// A pure function of the binary. It states the model, the provenance
 /// vocabulary, and the one invariant the binary enforces, then the
@@ -1170,17 +1169,15 @@ fn print_view_list_json(ws: &crate::workspace::Workspace, views: &[crate::worksp
     println!("{}", serde_json::to_string_pretty(&arr).unwrap());
 }
 
-/// A graph answer computed over an incomplete closure is not wrong-but-
-/// close; it is wrong. Say so rather than presenting it as whole.
+/// A graph answer computed over an incomplete closure is wrong, not
+/// approximate. Say so rather than presenting it as whole.
 fn print_partial(ws: &crate::workspace::Workspace) {
     let missing = ws.missing();
     if !missing.is_empty() {
-        eprintln!("partial — unreachable store(s): {}", missing.join(", "));
+        eprintln!("partial: unreachable store(s): {}", missing.join(", "));
     }
 }
 
-/// Findings that only the store layer can see.
-/// The first line of a span, shortened for the review listing.
 /// One line of a span, and how much of it the line leaves out.
 ///
 /// Approving a span approves all of it. A preview that shows the first

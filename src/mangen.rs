@@ -6,8 +6,8 @@ use std::path::Path;
 
 /// Write one section-1 man page for the command and one for each
 /// visible subcommand, recursively. The page name joins the command
-/// path with hyphens: `tisket.1`, `tisket-issue.1`,
-/// `tisket-issue-create.1`.
+/// path with hyphens: `zettel.1`, `zettel-note.1`,
+/// `zettel-note-create.1`.
 pub fn write_man_pages(cmd: &clap::Command, dir: &Path) -> std::io::Result<()> {
     let name = cmd.get_name().to_string();
     write_pages_rec(cmd, &name, dir)

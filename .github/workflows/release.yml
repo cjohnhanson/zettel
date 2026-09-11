@@ -11,13 +11,12 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+-*"
-  # A dry run. Every build job runs and every publish job is skipped,
-  # so the whole matrix can be exercised before a tag exists. A release
-  # that first compiles on tag day is a guess, not a release.
-  # A dry run, and only ever a dry run. Every build job runs and nothing
-  # is uploaded. A dispatch carries no tag, so it has no version to
-  # publish and no release to attach: publishing from one reached three
-  # registries and then failed with the version permanently taken.
+  # A dry run, and only ever a dry run. Every build job runs, every
+  # publish job is skipped, and nothing is uploaded, so the whole matrix
+  # can be exercised before a tag exists. A dispatch carries no tag, so
+  # it has no version to publish and no release to attach. Publishing
+  # from one reached three registries and then failed with the version
+  # permanently taken.
   workflow_dispatch:
 
 # Least privilege at the top; each job widens only what it needs.
@@ -34,8 +33,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # A tag that disagrees with the manifest publishes a version
-      # nobody asked for, and a registry keeps it forever.
       # A tag is the only trigger, and anyone who can push a tag can
       # point one at any commit. Requiring the commit to be on main
       # means a release carries what main carries, and nothing else.
@@ -48,6 +45,8 @@ jobs:
             exit 1
           fi
 
+      # A tag that disagrees with the manifest publishes a version
+      # nobody asked for, and a registry keeps it forever.
       - name: Check the tag matches Cargo.toml
         if: github.event_name == 'push'
         run: |
@@ -66,9 +65,9 @@ jobs:
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test --workspace --all-features
 
-      # The merge gate runs this suite on every pull request, so a release that
-      # skipped it would be a weaker gate than the one that let the
-      # commit in.
+      # The merge gate runs this suite on every pull request, so a
+      # release that skipped it would be a weaker gate than the one
+      # that let the commit in.
       - name: Run the missouri suite
         if: hashFiles('tests/missouri/**') != ''
         env:
@@ -161,6 +160,11 @@ jobs:
           mkdir -p "$staging"
           cp "target/${{ matrix.target }}/release/${BIN_NAME}" "$staging/"
           cp README.md LICENSE "$staging/"
+          # The README promises the man page in every archive. The
+          # target binary may not run on this runner, so a host build
+          # writes it.
+          mkdir -p "$staging/man"
+          cargo run --release --locked --quiet --bin "${BIN_NAME}" -- gen-man "$staging/man"
           tar czf "$staging.tar.gz" "$staging"
           shasum -a 256 "$staging.tar.gz" > "$staging.tar.gz.sha256"
           echo "asset=$staging.tar.gz" >> "$GITHUB_OUTPUT"
@@ -340,7 +344,7 @@ jobs:
       - name: Check the wrapper runs
         run: |
           npm pack ./npm/zttl --pack-destination /tmp
-          npm pack ./npm/cli-linux-x64-musl --pack-destination /tmp
+          npm pack ./npm/zttl-linux-x64-musl --pack-destination /tmp
           mkdir -p /tmp/probe && cd /tmp/probe && npm init -y >/dev/null
           npm install /tmp/*.tgz
           npx zttl --version
@@ -377,13 +381,16 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          for d in npm/cli-*; do npm publish "$d" --access public --provenance; done
+          for d in npm/zttl-*; do npm publish "$d" --access public --provenance; done
           npm publish npm/zttl --access public --provenance
 
 
   debs:
     needs: build
-    if: github.event_name == 'push'
+    # No job gate. A dispatch is meant to rehearse the release, and
+    # this job and `tap` were the two it skipped, so a rehearsal
+    # reported green while a tag failed in both. They build on a
+    # dispatch and upload only on a tag.
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -394,14 +401,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-${{ matrix.target }}
+          path: staged
+          merge-multiple: true
       - name: Install cargo-deb
         run: cargo install cargo-deb --locked
       # A .deb attached to a release installs with `dpkg -i`. It is not
       # an apt repository, so `apt-get install` still does not work.
       # That needs a signed, hosted repository, which does not exist.
       - name: Build the package
-        run: cargo deb --target ${{ matrix.target }} --no-build --no-strip
+        run: |
+          # --no-build packages what is already on disk, and nothing put
+          # it there. The build job's artifact carries it.
+          mkdir -p "target/${{ matrix.target }}/release"
+          cp "staged/binaries-${{ matrix.target }}"/* \
+             "target/${{ matrix.target }}/release/"
+          chmod +x "target/${{ matrix.target }}/release"/*
+          cargo deb --target ${{ matrix.target }} --no-build --no-strip
       - name: Attach it to the release
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -411,7 +431,7 @@ jobs:
 
   tap:
     needs: build
-    if: github.event_name == 'push'
+    # No job gate, for the reason under `debs`.
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -442,7 +462,10 @@ jobs:
             [x86_64-unknown-linux-musl]=PLACEHOLDER_LINUX_X64
           )
           for target in "${!slot[@]}"; do
-            file="dl/zettel-${target}.tar.gz"
+            # The archive carries the tag: build assembles
+            # <bin>-<tag>-<target>. Reading it without the tag
+            # found nothing, and the job exited 1 on every tag.
+            file="dl/zettel-${GITHUB_REF_NAME}-${target}.tar.gz"
             if [ ! -f "$file" ]; then
               echo "no asset for ${target}" >&2
               exit 1
@@ -453,6 +476,7 @@ jobs:
           sed -i "s/^  version \".*\"$/  version \"${version}\"/" "$formula"
           grep -q PLACEHOLDER "$formula" && { echo "a checksum was not filled" >&2; exit 1; } || true
       - name: Push the formula
+        if: github.event_name == 'push'
         working-directory: tap
         run: |
           git config user.name "github-actions[bot]"

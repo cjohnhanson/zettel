@@ -9,7 +9,7 @@ pub enum Error {
     #[error("note '{0}' not found")]
     NoteNotFound(String),
 
-    #[error("ambiguous prefix '{0}' — matches multiple notes")]
+    #[error("ambiguous prefix '{0}'; it matches several notes")]
     AmbiguousPrefix(String),
 
     #[error("note '{0}' already exists")]
@@ -40,7 +40,7 @@ pub enum Error {
     UndeclaredStore(String),
 
     #[error(
-        "'{0}' is in store '{1}'; dependency stores are read-only — run the command from that store to edit it"
+        "'{0}' is in store '{1}'; a dependency store is read-only. Run the command from that store to edit the note"
     )]
     ForeignWrite(String, String),
 

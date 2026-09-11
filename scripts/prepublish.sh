@@ -1,26 +1,32 @@
 #!/bin/sh
 # Everything that must be true before this crate publishes.
 #
-# Written after 0.1.0 published a lib that does not compile under
-# `--no-default-features --features store`, which is how two of five
-# consumers take it. `cargo test --all-features` passed, and that was
-# read as proof. One feature set is not a feature matrix.
+# `cargo test --all-features` proves one feature set, and one feature
+# set is not a feature matrix. A feature that is off by default is
+# still shipped code, so a consumer who takes it can meet a compile
+# error from inside the crate.
 #
-# The first version of this script parsed feature names out of
-# Cargo.toml with awk. A reviewer showed it silently dropped any name
-# holding a digit, a capital, quotes or leading whitespace, and never
-# tried a combination. A silent skip is the class of failure that
-# shipped 0.1.0, so the parsing is cargo-hack's now: it reads features
-# from cargo metadata and walks the powerset.
+# cargo-hack reads the feature names from cargo metadata and walks the
+# powerset. Parsing them out of Cargo.toml by hand drops any name that
+# holds a digit, a capital, quotes, or leading whitespace, and a
+# silently skipped feature is exactly what this script exists to catch.
 set -eu
 TC="${TOOLCHAIN:-1.98.0}"
 fail=0
 say() { printf '  %-46s %s\n' "$1" "$2"; }
+
+# A refusal prints why. Both streams went to /dev/null, so every failure
+# read as a bare FAILS: a full disk and a real packaging fault looked the
+# same, and finding out which meant running the command again by hand.
 run() {
 	label="$1"
 	shift
-	if "$@" >/dev/null 2>&1; then say "$label" ok; else
+	out=$("$@" 2>&1)
+	if [ $? -eq 0 ]; then
+		say "$label" ok
+	else
 		say "$label" FAILS
+		printf '%s\n' "$out" | tail -12 | sed 's/^/      /'
 		fail=1
 	fi
 }
