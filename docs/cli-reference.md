@@ -26,7 +26,7 @@ Zettelkasten note management on frontmattered markdown.
 
 Without `--root`, a command finds its store by one rule, identical in
 tisket and almanac: the nearest `zettel.yml` at or above the working
-directory wins. The walk requires a regular file and stops at the first
+directory wins. The walk requires a regular file. It stops at the first
 directory the invoking user does not own, so a marker planted in a
 shared ancestor captures nothing. With no store found, a read falls
 back to the root store set in `~/.config/zettel/config.yml` and says
@@ -233,8 +233,8 @@ Each store syncs on its own, and one failure never stops another. The
 command prints a line for each, then exits non-zero if any failed. A
 store fails when its source is unreachable, and also when its declared
 revision is absent from what arrived. Both checks run before the
-command calls a store synced, so a fetch that moved bytes without
-carrying the revision fails here rather than on a later read.
+command calls a store synced. A fetch that moved bytes without the
+revision fails here, not on a later read.
 
 A git store keeps one bare clone for each URL, and its notes are read
 from git objects at the revision that each store declares. Two stores
@@ -263,8 +263,8 @@ stores:
 
 A store's declarations stay as written. The registry redirects where
 each declared source resolves, so the checkout answers for that source,
-pinned revision included, and a command can read a note that is only in
-that working tree. `zettel store list` marks a
+pinned revision included. A command can then read a note that is only
+in that working tree. `zettel store list` marks a
 row the registry bound, and `zettel check` reports a reference that
 resolves only through the checkout: that reference works here and
 nowhere else.
