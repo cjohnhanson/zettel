@@ -52,6 +52,20 @@ fn git(repo: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .args(args)
         .current_dir(repo)
+        // A git hook exports GIT_DIR and its relatives. Inherited, they
+        // aim every command here at the real repository whatever the
+        // working directory says, which is how this fixture once
+        // committed to the branch under test and deleted its files.
+        // `current_dir` does not override them; only removing them does.
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_OBJECT_DIRECTORY")
+        .env_remove("GIT_ALTERNATE_OBJECT_DIRECTORIES")
+        .env_remove("GIT_COMMON_DIR")
+        .env_remove("GIT_QUARANTINE_PATH")
+        .env_remove("GIT_NAMESPACE")
+        .env_remove("GIT_PREFIX")
         .env("GIT_AUTHOR_NAME", "t")
         .env("GIT_AUTHOR_EMAIL", "t@example.com")
         .env("GIT_COMMITTER_NAME", "t")
@@ -81,6 +95,18 @@ fn scratch_repo(name: &str) -> (PathBuf, String) {
     )
     .expect("policy");
     git(&repo, &["init", "-q"]);
+    // Prove the fixture owns its own git directory before anything
+    // writes. Under a hook that exports GIT_DIR, an inherited value
+    // would point this at the repository being tested. git resolves
+    // symlinks and the temp directory is one on macOS, so both sides
+    // have to be canonical before they can be compared.
+    let git_dir = git(&repo, &["rev-parse", "--absolute-git-dir"]);
+    let want = repo.canonicalize().expect("the fixture directory exists");
+    assert!(
+        Path::new(&git_dir).starts_with(&want),
+        "the fixture resolves its git directory to {git_dir}, outside {}",
+        want.display()
+    );
     git(&repo, &["add", "."]);
     git(&repo, &["commit", "-q", "-m", "one"]);
     let head = git(&repo, &["rev-parse", "HEAD"]);
