@@ -1,7 +1,9 @@
 //! The single-binary rule: this crate spawns no external program where a
-//! library exists. No git, curl, aws, gcloud, sh, or kill. The only
-//! spawns permitted are of a command the user declared in config, and
-//! those name no program literal in source.
+//! library exists. No git, curl, aws, gcloud, sh, or kill. Two spawns
+//! are permitted: a command the user declared in config, and the
+//! short-name shim in `src/bin`, which execs the sibling binary by its
+//! own path so one install carries one copy of the code. Neither names
+//! a program literal in source, which is what this test reads for.
 
 #[test]
 fn no_source_file_spawns_a_named_program() {

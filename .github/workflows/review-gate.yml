@@ -44,6 +44,10 @@ jobs:
 
           # The policy and the criteria are main's, because this
           # checkout is main's.
+          if grep -q '^reviews: *\[\]' .gaff/gaff.yml; then
+            echo "review-gate: ok, the base branch requires no review"
+            exit 0
+          fi
           required=$(awk '/^reviews:/ {inside=1; next}
                           inside && /^  - / {print $2; next}
                           inside && !/^  - / {exit}' .gaff/gaff.yml)
@@ -84,7 +88,7 @@ jobs:
               $1 == "signoff[" name "]" && $2 == "PASS" && length($3) >= 7 && index(head, $3) == 1 && NF >= 6 { n++ }
               END { print n + 0 }')
             if [ "$count" -eq 1 ] && [ "$bound" -eq 0 ]; then
-              echo "review-gate: the $name sign-off names another commit, or carries fewer than three words of evidence." >&2
+              echo "review-gate: the $name sign-off names another commit, a sha under seven characters, or fewer than three words of evidence." >&2
               exit 1
             fi
           done

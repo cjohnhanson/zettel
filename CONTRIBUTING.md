@@ -27,18 +27,21 @@ pull request.
 
 ## What CI checks
 
-`main` is protected. One required check, `gate`, decides a merge. It
-runs on every pull request, and it runs the same commands the local git
-hooks run:
+Three workflows run. `verify` runs on every push. `gate` runs on a pull
+request, and `main` requires it. `review-gate` runs on a pull request
+too, and reads the sign-off note against the policy on `main`, so a
+branch cannot weaken the check that judges it.
+
+`verify` and `gate` run the commands the local git hooks run:
 
 ```sh
-cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 cd tests/missouri && missouri run
 ```
 
-After those, the check reads a review note from the head commit of the
+After those, `gate` reads a review note from the head commit of the
 branch. It reads the branch head, not the merge commit GitHub builds for
 CI, because no reviewer saw that merge commit.
 
@@ -63,7 +66,7 @@ git notes --ref=reviews add -m '<the lines>' <sha>
 contributor from outside, open the pull request and stop there. The
 maintainer runs the reviews on its head commit and writes the note.
 
-The check refuses a note with any of these faults:
+Both checks refuse a note with any of these faults:
 
 - no line for a declared review
 - a `FAIL` verdict
@@ -75,19 +78,18 @@ Prose around the lines is ignored, so a note can also carry a narrative.
 
 ## Running the gates locally
 
-`.gaff/gaff.yml` declares the gates once, and CI reads that file, so a
-local run and CI cannot differ. To run them against `HEAD` without a
-commit:
+`.gaff/gaff.yml` declares the gates once. `gaff init --github` writes
+the `verify` and `gate` workflows from it, and `gaff init --git` writes
+the hooks. To run the gates against `HEAD` without a commit:
 
 ```sh
 cargo install --git https://github.com/cjohnhanson/gaff
 gaff ci
 ```
 
-`gaff init --git` installs the same gates as git hooks. The pre-push
-hook refuses a push that carries no review note. For a one-off
-contribution, leave the hooks uninstalled and let CI run the gates on
-the pull request.
+The pre-push hook refuses a push that carries no review note. For a
+one-off contribution, leave the hooks uninstalled and let CI run the
+gates on the pull request.
 
 ## Pull requests
 
@@ -98,14 +100,17 @@ not show it.
 
 ## Releases
 
-Before a tag, run `sh scripts/prepublish.sh`. It needs `cargo-hack` and
-`cargo-audit`. It checks every feature combination, runs the tests,
-clippy, and fmt under the pinned toolchain, audits the lock, runs a
-publish dry run from a clean checkout, and confirms the version is not
-on crates.io. Then bump the version in `Cargo.toml`, commit, tag
-`v<version>`, and push the tag. `.github/workflows/release.yml` builds
-and publishes from there. A `workflow_dispatch` run of that workflow
-rehearses every build and publishes nothing.
+Before a tag, run `sh scripts/prepublish.sh`. It needs `cargo-hack`,
+`cargo-audit`, `python3`, and `curl`. It checks every feature
+combination, runs the tests, clippy, and fmt under the pinned
+toolchain, audits the lock, runs a publish dry run from a clean
+checkout, and confirms the version is not on crates.io. The first
+publish of a name to crates.io is a manual `cargo publish` with a
+token, because trusted publishing cannot create a crate. After that,
+bump the version in `Cargo.toml`, commit, tag `v<version>`, and push
+the tag. `.github/workflows/release.yml` builds and publishes from
+there. A `workflow_dispatch` run of that workflow rehearses every
+build and publishes nothing.
 
 ## What not to commit
 
