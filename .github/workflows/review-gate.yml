@@ -77,6 +77,16 @@ jobs:
               echo "review-gate: $name signed off $count times on $HEAD_SHA. One line each." >&2
               exit 1
             fi
+            # The line must name this commit, by a prefix of at least
+            # seven characters, and carry three words of evidence. Without
+            # the binding, a line copied from an older note passes.
+            bound=$(printf '%s\n' "$note" | awk -v name="$name" -v head="$HEAD_SHA" '
+              $1 == "signoff[" name "]" && $2 == "PASS" && length($3) >= 7 && index(head, $3) == 1 && NF >= 6 { n++ }
+              END { print n + 0 }')
+            if [ "$count" -eq 1 ] && [ "$bound" -eq 0 ]; then
+              echo "review-gate: the $name sign-off names another commit, or carries fewer than three words of evidence." >&2
+              exit 1
+            fi
           done
           if [ -n "$missing" ]; then
             echo "review-gate: $HEAD_SHA carries no sign-off for:$missing" >&2

@@ -130,9 +130,12 @@ jobs:
             cross: false
     steps:
       - uses: actions/checkout@v4
+      # rust-toolchain.toml selects the toolchain for every cargo call,
+      # and the action does not read that file. A target given to the
+      # action lands in `stable`, which nothing here compiles under.
+      # rustup adds it to the pinned toolchain when run in the repository.
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      - run: rustup target add ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}

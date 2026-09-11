@@ -96,6 +96,17 @@ and its tests in one pull request. Write the commit message in the
 imperative present: what the change does, and why, where the diff does
 not show it.
 
+## Releases
+
+Before a tag, run `sh scripts/prepublish.sh`. It needs `cargo-hack` and
+`cargo-audit`. It checks every feature combination, runs the tests,
+clippy, and fmt under the pinned toolchain, audits the lock, runs a
+publish dry run from a clean checkout, and confirms the version is not
+on crates.io. Then bump the version in `Cargo.toml`, commit, tag
+`v<version>`, and push the tag. `.github/workflows/release.yml` builds
+and publishes from there. A `workflow_dispatch` run of that workflow
+rehearses every build and publishes nothing.
+
 ## What not to commit
 
 `.gitignore` covers `target/`, editor and agent state, and
