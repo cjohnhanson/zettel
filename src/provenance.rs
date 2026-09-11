@@ -7,7 +7,7 @@
 //! - `agent[:kind]` — the kind is `summary`, `index`, or `inference`.
 //! - `citation[:source]` — verbatim quoted material; the source is a note
 //!   ID or a short key, with a `src=` attribute for URLs.
-//! - No provenance means **unknown**. Unknown is never upgraded to human.
+//! - No provenance means unknown. Unknown is never upgraded to human.
 //!
 //! The `reviewed=DATE` attribute marks human approval of an agent span.
 //! Only `zettel note review` writes it.

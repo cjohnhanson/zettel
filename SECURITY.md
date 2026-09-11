@@ -22,9 +22,14 @@ are credited unless you ask otherwise.
 
 ## Scope
 
-zettel stores notes as markdown files with YAML frontmatter. Notes link by id, across stores a `stores.yml` declares. It serves a store over the Model Context Protocol.
+zettel stores notes as markdown files with YAML frontmatter. Notes link
+by ID, and a `stores.yml` declares the other stores a link can reach.
+The tool also serves a store over the Model Context Protocol.
 
-A declared store can come from content the reader does not control, such as a vendored dependency or a remote store. What that declaration can reach is the boundary worth attacking. The MCP server is the other one: it exposes a store to whatever drives it.
+A declared store can come from content the reader does not control,
+such as a vendored dependency or a remote store. A declaration decides
+what the tool fetches and reads. The MCP server decides what a client
+can ask for. Both are in scope.
 
 In scope:
 
@@ -44,6 +49,7 @@ Out of scope:
 
 ## Known boundaries
 
-Documented limits are not vulnerabilities. `src/confined.rs` carries a
-`# What this does not cover` section in its module documentation. Read
+Documented limits are not vulnerabilities. The `confined` module of the
+`mdstore-core` dependency holds the containment guarantee, and its
+module documentation carries a `What this does not cover` section. Read
 it before reporting a traversal issue.
