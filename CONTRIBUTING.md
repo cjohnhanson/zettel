@@ -16,6 +16,10 @@ cargo build
 cargo test --workspace --all-features
 ```
 
+Some tests need other programs on `PATH`: `node` for the npm wrapper,
+`missouri` for the state suite, and `gaff` for the merge-gate tests.
+The section on running the gates locally says where each comes from.
+
 ## Before a large change
 
 Open a GitHub issue first. A small fix needs none.
