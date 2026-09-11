@@ -40,6 +40,15 @@ fn step_script(name: &str) -> String {
 }
 
 fn git(repo: &Path, args: &[&str]) -> String {
+    // Never run git anywhere but the scratch repository this file made.
+    // These fixtures once shared one fixed path between concurrent runs
+    // of the suite, and a `git add .` and a `git commit` reached the
+    // real worktree and deleted every tracked file in it.
+    assert!(
+        repo.is_dir() && repo.starts_with(std::env::temp_dir()),
+        "refusing to run git outside the scratch repository: {}",
+        repo.display()
+    );
     let out = Command::new("git")
         .args(args)
         .current_dir(repo)
@@ -60,7 +69,10 @@ fn git(repo: &Path, args: &[&str]) -> String {
 /// A repository declaring two reviews and holding one commit. Returns
 /// the repository and its head sha.
 fn scratch_repo(name: &str) -> (PathBuf, String) {
-    let repo = std::env::temp_dir().join(format!("zettel_review_gate_{name}"));
+    // The process id is part of the path. Two concurrent runs of this
+    // suite shared one directory and destroyed each other's fixture.
+    let repo =
+        std::env::temp_dir().join(format!("zettel_review_gate_{}_{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&repo);
     std::fs::create_dir_all(repo.join(".gaff")).expect("scratch repo");
     std::fs::write(
