@@ -94,8 +94,12 @@ fn a_pull_request_refuses_a_head_with_no_note() {
     )
     .expect("the event payload writes");
 
+    // stdin carries a different sha from the payload, so the refusal
+    // shows which one the gate judged. With both equal, deleting the
+    // substitution left every test green.
+    let on_stdin = "1111111111111111111111111111111111111111";
     let (code, out) = run_gate(
-        NOTELESS,
+        on_stdin,
         &[
             ("GITHUB_ACTIONS", "true"),
             ("GITHUB_EVENT_NAME", "pull_request"),
@@ -106,6 +110,10 @@ fn a_pull_request_refuses_a_head_with_no_note() {
     assert!(
         out.contains("no review note on"),
         "expected the note refusal, got: {out}"
+    );
+    assert!(
+        out.contains(&NOTELESS[..7]) && !out.contains("1111111"),
+        "the gate judged the sha on stdin, not the pull request head: {out}"
     );
 }
 

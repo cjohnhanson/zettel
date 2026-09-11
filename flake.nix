@@ -67,7 +67,7 @@
 
           commonArgs = {
             pname = "zettel";
-            version = "0.1.0";
+            version = "0.2.0";
             inherit src;
             strictDeps = true;
             buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
@@ -101,7 +101,10 @@
               # builds PATH from the declared inputs, so both have to be
               # named here. A runner has them already, which is why the
               # gate stays green while the package cannot build.
-              nativeCheckInputs = [ pkgs.gitMinimal pkgs.jq ];
+              nativeCheckInputs = [
+                pkgs.gitMinimal
+                pkgs.jq
+              ];
               checkPhase = ''
                 tmpHome="$(mktemp -d)"
                 export HOME="$tmpHome"
