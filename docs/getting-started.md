@@ -1,10 +1,10 @@
 <!-- metadata
-title: "Getting Started with Zettel"
+title: "Getting started with Zettel"
 description: "Initialize a knowledge base, create notes, link them, and explore the graph"
 type: tutorial
 -->
 
-# Getting Started with Zettel
+# Getting started with Zettel
 
 ## Initialize
 
@@ -20,7 +20,7 @@ The command makes the config file `zettel.yml` and the note directory
 ## Create a note
 
 ```bash
-zettel note create "Connection pooling causes stale reads under load" \
+zettel note create "Connection pooling causes stale reads" \
   -t debugging,postgres -p agent:summary
 ```
 
@@ -31,8 +31,7 @@ Zettel prints the note ID, for example
 The `-p` flag sets the note's default provenance: who produced the text.
 An agent passes `agent:summary`, `agent:index`, or `agent:inference`. A
 person passes `human` or `human:<name>`. Without the flag the provenance is
-unknown, and readers treat unknown text with the most suspicion — always
-set it.
+unknown, which is the weakest thing a later reader can be told about a span.
 
 Add a body on the command line:
 
@@ -76,7 +75,7 @@ Notes connect to each other through the `links` frontmatter field. Add a link
 when you create the note:
 
 ```bash
-zettel note create "Workaround: force new connection per transaction" \
+zettel note create "Workaround: force new connection" \
   -t postgres \
   -l a3f2-connection-pooling-causes-stale-reads
 ```
@@ -154,7 +153,7 @@ for an external source. Text outside the markers keeps the note default.
 5. A reader pulls trusted content with
    `zettel read --provenance human,citation,reviewed`.
 
-Only a human runs `--approve`. Agents never write `reviewed=` stamps.
+Only a human runs `--approve`.
 
 ## Migrate from the status model
 

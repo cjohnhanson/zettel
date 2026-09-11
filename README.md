@@ -3,14 +3,13 @@
 Zettel is a zettelkasten knowledge base for code repositories. It keeps atomic
 notes as markdown files in `.zettel/`. Notes link to each other through YAML
 frontmatter and inline `[[id]]` references. Git tracks the notes next to the
-code.
+code, and no external service holds them.
 
-Zettel solves one problem. During research an agent reads code, traces bugs,
-and compares options. That work is usually lost at the end of the session.
-Zettel writes the work down as notes labeled with their provenance: who
-produced each piece of text, and what kind of claim it makes. A human reviews
-the agent content later and approves what they stand behind. The notes are
-plain text. Git tracks them. Zettel needs no external service.
+During research an agent reads code, traces bugs, and compares options. That
+work is usually lost at the end of the session. Zettel writes it down as notes
+labeled with their provenance: who produced each piece of text, and what kind
+of claim it makes. A human reviews the agent content later and approves what
+they stand behind.
 
 ## Install
 
@@ -59,7 +58,7 @@ zettel search "stale read"
 zettel context a3f2 --depth 2
 ```
 
-The full command set:
+Every command:
 
 ```sh
 zettel init                                  # make .zettel/ in a git repo
@@ -76,11 +75,14 @@ zettel backlinks <id>                        # show the notes that link to this 
 zettel context <id> --depth N                # show the notes within N hops
 zettel orphans                               # show the notes with no links
 zettel store list                            # show this store and the stores it declares
+zettel store sync                            # fetch the declared remote stores into the cache
+zettel store root [<path>]                   # show or set the store that reads fall back to
 zettel check                                 # check for broken links and invalid provenance
 zettel migrate                               # convert pre-provenance notes (status keys)
 zettel stats                                 # show counts, tag distribution, and connectivity
 zettel serve [--bind ADDR] [--access MODE]   # serve this knowledge base over MCP
 zettel docs [topic]                          # show the bundled documentation
+zettel prime                                 # print what zettel is, for an agent's context
 ```
 
 ## How it works
@@ -112,7 +114,7 @@ it. Zettel keeps the notes in one flat `.zettel/` directory:
 
 ```
 .zettel/
-  a3f2-connection-pooling-stale-reads.md
+  a3f2-connection-pooling-causes-stale-reads.md
   b7c1-workaround-force-new-connection.md
 ```
 
@@ -135,8 +137,9 @@ The origins:
 A human approves agent content with `zettel note review <id> --approve`,
 which writes a `reviewed=` stamp. A later reader filters by all of this:
 `zettel read --provenance human,citation,reviewed` returns only the text a
-human wrote, quoted, or vouched for. The labels are convention, not proof —
-the same trust model as the files themselves.
+human wrote, quoted, or vouched for. Nothing verifies a label against what
+actually wrote the span. Reading the files directly gives the same labels
+and the same caveat.
 
 ## Composed stores
 
@@ -191,8 +194,8 @@ authenticates in front of it.
 ## Documentation
 
 - [What is Zettel?](docs/what-is-zettel.md) — the zettelkasten model, the note format, the workflow
-- [Getting Started](docs/getting-started.md) — a walkthrough of the first notes
-- [CLI Reference](docs/cli-reference.md) — the complete command documentation
+- [Getting started](docs/getting-started.md) — a walkthrough of the first notes
+- [CLI reference](docs/cli-reference.md) — the complete command documentation
 
 Run `zettel docs` to read the same documentation from the binary.
 
