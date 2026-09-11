@@ -20,7 +20,14 @@ set -e
 # review needs to be required. A name with no criteria is a review
 # nobody can perform. A criterion nobody requires is a check that one
 # edit dropped. Checking both directions is what stops that edit.
+command -v gaff >/dev/null || {
+	echo "merge-gate: gaff is not on PATH, so the review check cannot run." >&2
+	echo "  cargo install --git https://github.com/cjohnhanson/gaff" >&2
+	exit 1
+}
 required=$(gaff reviews)
+# No pathname expansion while the names are split into words.
+set -f
 for name in $required; do
 	if [ ! -f ".agents/skills/$name/SKILL.md" ]; then
 		echo "merge-gate: $name is required and has no criteria in .agents/skills." >&2
@@ -28,11 +35,12 @@ for name in $required; do
 		exit 1
 	fi
 done
+set +f
 for dir in .agents/skills/review-*/; do
 	[ -d "$dir" ] || continue
 	name=${dir#.agents/skills/}
 	name=${name%/}
-	if ! printf '%s\n' "$required" | grep -qx "$name"; then
+	if ! printf '%s\n' "$required" | grep -qxF "$name"; then
 		echo "merge-gate: $name is vendored and required by nothing." >&2
 		echo "  Name it under reviews: in .gaff/gaff.yml, or remove it." >&2
 		exit 1
