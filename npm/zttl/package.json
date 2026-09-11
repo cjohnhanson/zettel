@@ -1,21 +1,25 @@
 {
-  "name": "zttl",
-  "description": "Zettelkasten note management on frontmattered markdown",
-  "bin": {
-    "zttl": "bin/run.js",
-    "zettel": "bin/run.js"
-  },
-  "files": [
-    "bin/run.js"
-  ],
-  "engines": {
-    "node": ">=18"
-  },
-  "license": "MIT",
-  "optionalDependencies": {
-    "@cjohnhanson/zttl-darwin-arm64": "0.0.0",
-    "@cjohnhanson/zttl-darwin-x64": "0.0.0",
-    "@cjohnhanson/zttl-linux-arm64-musl": "0.0.0",
-    "@cjohnhanson/zttl-linux-x64-musl": "0.0.0"
-  }
+	"name": "zttl",
+	"description": "Zettelkasten note management on frontmattered markdown",
+	"bin": {
+		"zttl": "bin/run.js",
+		"zettel": "bin/run.js"
+	},
+	"files": [
+		"bin/run.js"
+	],
+	"engines": {
+		"node": ">=18"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/cjohnhanson/zettel.git"
+	},
+	"optionalDependencies": {
+		"@cjohnhanson/zttl-darwin-arm64": "0.0.0",
+		"@cjohnhanson/zttl-darwin-x64": "0.0.0",
+		"@cjohnhanson/zttl-linux-arm64-musl": "0.0.0",
+		"@cjohnhanson/zttl-linux-x64-musl": "0.0.0"
+	}
 }

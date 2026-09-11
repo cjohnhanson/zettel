@@ -1,6 +1,6 @@
 #!/bin/sh
 # The commit gate. A commit needs formatted code and a clean clippy:
-# zero warnings, zero errors. The push gate then holds tests, the
+# zero warnings, zero errors. The merge gate then holds tests, the
 # missouri suite, and a sign-off for every declared review.
 set -e
 

@@ -4,10 +4,12 @@
 # missouri suite, and a sign-off for every review .gaff/gaff.yml
 # declares.
 #
-# The review record is a git note on the pushed tip:
-#   git notes --ref=reviews add -m 'signoff[<review>] PASS <sha> <evidence>' <sha>
-# Write a note only after an independent reviewer has read the change
-# and its test coverage. A note without a review makes the gate false.
+# The review record is one git note on the pushed tip, one line per
+# review, written once:
+#   git notes --ref=reviews add -m '<the lines>' <sha>
+# Each line reads `signoff[<review>] PASS <sha> <evidence>`. Write a
+# note only after an independent reviewer has read the change and its
+# test coverage. A note without a review makes the gate false.
 #
 # The gate has three known limits. The suites test the working tree,
 # not the pushed commit. A fresh clone has no hooks until `gaff init
@@ -22,7 +24,7 @@ set -e
 # edit dropped. Checking both directions is what stops that edit.
 command -v gaff >/dev/null || {
 	echo "merge-gate: gaff is not on PATH, so the review check cannot run." >&2
-	echo "  cargo install --git https://github.com/cjohnhanson/gaff" >&2
+	echo "  cargo install --locked --git https://github.com/cjohnhanson/gaff" >&2
 	exit 1
 }
 required=$(gaff reviews)
@@ -81,6 +83,7 @@ fi
 if [ -d tests/missouri ] && { [ -z "${MERGE_GATE_SKIP_TESTS:-}" ] || [ -z "${CARGO:-}" ]; }; then
 	command -v missouri >/dev/null || {
 		echo "merge-gate: missouri is not on PATH and tests/missouri exists." >&2
+		echo "  cargo install --locked --git https://github.com/cjohnhanson/missouri" >&2
 		exit 1
 	}
 	echo "merge-gate: missouri run"
