@@ -16,9 +16,16 @@ cargo build
 cargo test --workspace --all-features
 ```
 
-Some tests need other programs on `PATH`: `node` for the npm wrapper,
-`missouri` for the state suite, and `gaff` for the merge-gate tests.
-The section on running the gates locally says where each comes from.
+Some tests need other programs on `PATH`. Install `node` 18 or later
+from your package manager. Install the other two from source:
+
+```sh
+cargo install --locked --git https://github.com/cjohnhanson/missouri
+cargo install --locked --git https://github.com/cjohnhanson/gaff
+```
+
+`node` drives the npm wrapper tests, `missouri` runs the state suite,
+and `gaff` runs the merge-gate tests.
 
 ## Before a large change
 
