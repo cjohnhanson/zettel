@@ -8,23 +8,24 @@ set -e
 # on Rust files, the tree check would certify content the commit does
 # not contain, so the gate refuses that state first.
 if ! git diff --quiet -- '*.rs' 2>/dev/null; then
-  echo "commit-gate: unstaged Rust changes differ from the index." >&2
-  echo "  Stage them or stash them, so the checked tree is the committed tree." >&2
-  exit 1
+	echo "commit-gate: unstaged Rust changes differ from the index." >&2
+	echo "  Stage them or stash them, so the checked tree is the committed tree." >&2
+	exit 1
 fi
 
 echo "commit-gate: cargo fmt --check"
-cargo fmt --check >/dev/null || {
-  echo "commit-gate: the tree is not formatted. Run: cargo fmt" >&2
-  exit 1
+cargo fmt --all --check >/dev/null || {
+	echo "commit-gate: the tree is not formatted. Run: cargo fmt" >&2
+	exit 1
 }
 
 # The exit code is authoritative: -D warnings turns every warning into
-# a failure, so no output parsing decides anything.
+# a failure, so no output parsing decides anything. The flags match the
+# CI workflows, so a local green is a CI green.
 echo "commit-gate: cargo clippy"
-out=$(cargo clippy --workspace --all-targets --quiet -- -D warnings 2>&1) || {
-  echo "commit-gate: clippy is not clean. Zero warnings is the bar." >&2
-  printf '%s\n' "$out" | tail -30 >&2
-  exit 1
+out=$(cargo clippy --workspace --all-targets --all-features --quiet -- -D warnings 2>&1) || {
+	echo "commit-gate: clippy is not clean. Zero warnings is the bar." >&2
+	printf '%s\n' "$out" | tail -30 >&2
+	exit 1
 }
 echo "commit-gate: ok"
