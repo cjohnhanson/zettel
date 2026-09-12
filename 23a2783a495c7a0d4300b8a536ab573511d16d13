@@ -1,0 +1,14 @@
+Carried from e802acc, which the pull request squashed to 23a2783. Both
+commits name the same tree, so these sign-offs read what main holds.
+
+Review record for the release workflow fix.
+
+The change adds one step to the verify job of the release workflow. No
+code, no dependency, and no user-facing surface changes. The driver
+verified it directly. Each line states what was checked.
+
+signoff[review-tests] PASS 23a2783 the local suite is green at the parent commit, which is the state the new step reproduces on the runner, because gaff is on PATH here; the failing tag run named tests/merge_gate_guard.rs, where every assertion read "gaff is not on PATH" rather than the branch it covers; no test reads a workflow file, so the tag run is the check, and it is the run this commit exists to fix
+signoff[review-code] PASS 23a2783 the added step names cjohnhanson/gaff@main with run set to false, which is what .github/workflows/verify.yml already runs on every pull request; actionlint is not installed here, so the file was parsed with a YAML reader and the verify job's step list was printed in order, which places the new step after the cache and before cargo fmt
+signoff[review-docs] PASS 23a2783 the step carries a comment naming the test, the script, and the reason the pull request workflow passed while the tag failed; no README, man page or reference page lists the release workflow's steps, so no other document states something this contradicts
+signoff[review-deps] PASS 23a2783 no manifest and no lockfile changes, confirmed by the commit touching one file; the action added is the one the pull request workflow already runs, so the release path gains no supply-chain surface that the merge path does not already carry
+signoff[review-usability] PASS 23a2783 no binary, help text or error message changes; the reader this affects is whoever cuts the next tag, and what they met was a red verify job whose refusal named the missing binary and the command that installs it
