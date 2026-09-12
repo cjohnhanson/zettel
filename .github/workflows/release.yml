@@ -80,13 +80,17 @@ jobs:
       # The merge gate runs this suite on every pull request, so a
       # release that skipped it would be a weaker gate than the one
       # that let the commit in.
+      # The action installs missouri, which is what the pull request
+      # workflow already uses. A bare `cargo install --git` searches the
+      # whole repository, and missouri now carries a test fixture that
+      # is itself a package with a binary, so cargo refuses to choose.
+      - uses: cjohnhanson/missouri@main
+        if: hashFiles('tests/missouri/**') != ''
       - name: Run the missouri suite
         if: hashFiles('tests/missouri/**') != ''
         env:
           MISSOURI_SANDBOX: preinstalled
-        run: |
-          cargo install --git https://github.com/cjohnhanson/missouri --locked
-          cd tests/missouri && missouri run
+        run: cd tests/missouri && missouri run
 
       # Catches a packaging fault while the version can still change,
       # rather than after the registry has it.
