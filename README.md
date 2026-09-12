@@ -13,41 +13,50 @@ they stand behind.
 
 ## Install
 
-The package is `zttl`, because `zettel` was taken on every registry. On
-npm it is `@cjohnhanson/zttl`, because the registry refuses `zttl` as
-too close to names it already holds. The command is `zettel`, and both
-names install together.
+The command is `zettel`, whichever package you install.
 
-```sh
-cargo install --locked zttl
-brew install cjohnhanson/tap/zettel
-uv tool install zttl
-npm install -g @cjohnhanson/zttl
+**[Archives of precompiled binaries are available for macOS and
+Linux.](https://github.com/cjohnhanson/zettel/releases)** The Linux
+binaries are static executables. Each archive holds the binary, its man
+pages, the README and the licence. There is no Windows build.
+
+| Package manager | Package | Command |
+| --- | --- | --- |
+| [Homebrew](https://brew.sh) | [cjohnhanson/tap/zettel](https://github.com/cjohnhanson/homebrew-tap) | `brew install cjohnhanson/tap/zettel` |
+| [Cargo](https://doc.rust-lang.org/cargo/) | [zttl](https://crates.io/crates/zttl) | `cargo install --locked zttl` |
+| [uv](https://docs.astral.sh/uv/) | [zttl](https://pypi.org/project/zttl/) | `uv tool install zttl` |
+| [npm](https://www.npmjs.com) | [@cjohnhanson/zttl](https://www.npmjs.com/package/@cjohnhanson/zttl) | `npm install -g @cjohnhanson/zttl` |
+
+On Debian or Ubuntu, download the `.deb` from the [releases
+page](https://github.com/cjohnhanson/zettel/releases) and install it:
+
+```
+wget https://github.com/cjohnhanson/zettel/releases/download/v0.2.5/zttl_0.2.5-1_amd64.deb
+sudo dpkg -i zttl_0.2.5-1_amd64.deb
 ```
 
-`cargo install` builds from source. It needs Rust 1.88 and a C
-compiler. The other three carry a prebuilt binary for macOS and Linux,
-x86-64 and arm64, published by a tagged release.
+To run it once without installing anything:
 
-To build the unreleased `main` branch:
-
-```sh
-cargo install --locked --git https://github.com/cjohnhanson/zettel
 ```
-
-Or run it without installing:
-
-```sh
 uvx zttl read
 npx @cjohnhanson/zttl read
 ```
 
-A release also carries prebuilt archives and a `.deb`, on the [releases
-page](https://github.com/cjohnhanson/zettel/releases). Each archive
-holds the binary and the man page. Install a `.deb` with `dpkg -i`: it
-is a file, not a repository, so `apt-get install` does not reach it.
+### Building
 
-Check the install with `zettel --version`.
+zettel is written in Rust, so you need a [Rust
+installation](https://www.rust-lang.org/) to compile it. zettel compiles
+with Rust 1.88 or newer. A C compiler is needed as well, which
+`aws-lc-sys` uses for its cryptography.
+
+To build zettel:
+
+```
+git clone https://github.com/cjohnhanson/zettel
+cd zettel
+cargo build --release
+./target/release/zettel --version
+```
 
 ## Usage
 
