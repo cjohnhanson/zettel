@@ -9,12 +9,11 @@ reviews:
   - review-deps
   - review-usability
 
-# Repo-level gaff config. Two entries. The commit gate holds formatted
-# code and a clean clippy on pre-commit. The merge gate holds tests,
-# the missouri suite, and a sign-off for every declared review on
-# pre-push, which
-# is the merge check in a repo that merges by direct push. Installed by
-# `gaff init --git`.
+# Repo-level gaff config, installed by `gaff init --git`. The commit
+# gate holds formatted code and a clean clippy on pre-commit. The merge
+# gate holds tests, the missouri suite, and a sign-off for every
+# declared review on pre-push, which is the merge check in a repository
+# that merges by direct push.
 git:
   - name: commit-gate
     on:
@@ -29,8 +28,8 @@ git:
       - sh
       - scripts/merge-gate.sh
 
-# The CI gate: the same declarations, run by gaff ci on every push.
-# Branch protection on main requires this check, so a sha needs a green
+# The same declarations, run by `gaff ci` on a GitHub runner. Branch
+# protection on main requires the gate check, so a sha needs a green
 # gate before main accepts it.
 github:
   - name: gate

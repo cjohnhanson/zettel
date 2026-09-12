@@ -12,7 +12,7 @@ pub const ABOUT: &str = "Zettelkasten note management on frontmattered markdown"
 pub struct Args {
     /// Store directory. Literal: the directory must hold zettel.yml;
     /// no walk, no fallback. Without it, the nearest zettel.yml at or
-    /// above the cwd is used; with none, reads use the configured root
+    /// above the cwd is used. With none, reads use the configured root
     /// store and a write needs --home.
     #[arg(long, global = true)]
     pub root: Option<Utf8PathBuf>,
@@ -99,9 +99,9 @@ pub enum Command {
         shell: clap_complete::Shell,
     },
 
-    /// Manage the notes. The variant is boxed because NoteCommand is
-    /// far larger than the other variants, and clippy flags the size
-    /// difference.
+    /// Manage the notes
+    // Boxed because NoteCommand is far larger than the other variants,
+    // and clippy flags the size difference.
     #[command(subcommand)]
     Note(Box<NoteCommand>),
 
@@ -142,14 +142,13 @@ pub enum Command {
     Prime,
 }
 
-#[derive(clap::Args)]
-pub struct DocsArgs {
-    /// The topic slug to show, or "search" to search the docs
-    pub topic: Option<String>,
+pub use diataxis::DocsArgs;
 
-    /// The search query. Use it when the topic is "search".
-    pub query: Option<String>,
-}
+/// This tool's own documentation, compiled in.
+///
+/// The build script embedded every page in `docs/`, so nothing here
+/// lists them and `zettel docs` works from any directory.
+static DOCS: &[(&str, &str)] = diataxis::embedded_docs!();
 
 #[derive(Parser)]
 pub enum NoteCommand {
@@ -333,7 +332,8 @@ pub struct BacklinksArgs {
 
 #[derive(Parser)]
 pub struct SearchArgs {
-    /// The search pattern. Regular expressions work.
+    /// The search pattern, a regular expression. It matches case; (?i)
+    /// at the front turns that off.
     pub pattern: String,
 
     /// The output format (text or json)
@@ -436,8 +436,7 @@ pub struct StatsArgs {
     pub format: OutputFormat,
 }
 
-/// Run Zettel with the given arguments.
-/// The prime: what zettel is, for an agent's context.
+/// What zettel is, for an agent's context.
 ///
 /// A pure function of the binary. It states the model, the provenance
 /// vocabulary, and the one invariant the binary enforces, then the
@@ -630,7 +629,11 @@ fn run_store_root(
 pub fn run_command(root: &camino::Utf8Path, command: Command) -> crate::Result<()> {
     let root = root.to_path_buf();
     match command {
-        Command::Init => Repo::init(&root),
+        Command::Init => {
+            Repo::init(&root)?;
+            println!("initialized a zettel store at {root}");
+            Ok(())
+        }
 
         Command::GenMan { dir } => {
             use clap::CommandFactory as _;
@@ -733,6 +736,7 @@ pub fn run_command(root: &camino::Utf8Path, command: Command) -> crate::Result<(
                 }
                 NoteCommand::Delete(a) => {
                     repo.delete_note(&a.id)?;
+                    println!("deleted {}", a.id);
                     Ok(())
                 }
                 NoteCommand::Review(a) => {
@@ -1032,31 +1036,26 @@ pub fn run_command(root: &camino::Utf8Path, command: Command) -> crate::Result<(
             print!("{}", prime());
             Ok(())
         }
-        Command::Docs(args) => match args.topic.as_deref() {
-            None | Some("list") => {
-                crate::docs::list();
-                Ok(())
-            }
-            Some("search") => {
-                let query = args.query.as_deref().unwrap_or("");
-                crate::docs::search(query);
-                Ok(())
-            }
-            Some(slug) => {
-                if crate::docs::show(slug) {
+        Command::Docs(args) => {
+            let set = diataxis::DocSet::from_embedded(DOCS)
+                .map_err(|e| crate::Error::Io(std::io::Error::other(e.to_string())))?;
+            match args.request().and_then(|request| set.render(request)) {
+                Ok(text) => {
+                    print!("{text}");
                     Ok(())
-                } else {
-                    eprintln!("unknown doc: '{slug}'");
+                }
+                Err(e) => {
+                    eprintln!("{e}");
                     eprintln!();
                     eprintln!("available docs:");
-                    crate::docs::list();
+                    print!("{}", set.listing());
                     Err(crate::Error::Io(std::io::Error::new(
                         std::io::ErrorKind::NotFound,
-                        format!("doc '{slug}' not found"),
+                        e.to_string(),
                     )))
                 }
             }
-        },
+        }
 
         Command::Stats(a) => {
             Repo::open(&root)?;
@@ -1176,17 +1175,15 @@ fn print_view_list_json(ws: &crate::workspace::Workspace, views: &[crate::worksp
     println!("{}", serde_json::to_string_pretty(&arr).unwrap());
 }
 
-/// A graph answer computed over an incomplete closure is not wrong-but-
-/// close; it is wrong. Say so rather than presenting it as whole.
+/// A graph answer computed over an incomplete closure is wrong, not
+/// approximate. Say so rather than presenting it as whole.
 fn print_partial(ws: &crate::workspace::Workspace) {
     let missing = ws.missing();
     if !missing.is_empty() {
-        eprintln!("partial — unreachable store(s): {}", missing.join(", "));
+        eprintln!("partial: unreachable store(s): {}", missing.join(", "));
     }
 }
 
-/// Findings that only the store layer can see.
-/// The first line of a span, shortened for the review listing.
 /// One line of a span, and how much of it the line leaves out.
 ///
 /// Approving a span approves all of it. A preview that shows the first
