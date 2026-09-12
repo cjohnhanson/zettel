@@ -65,6 +65,14 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
 
+      # tests/merge_gate_guard.rs drives scripts/merge-gate.sh, and that
+      # script refuses to run its review check without gaff on PATH.
+      # The pull request workflow installs gaff through this action, so
+      # the suite passed there and failed here on the first tag.
+      - uses: cjohnhanson/gaff@main
+        with:
+          run: "false"
+
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test --workspace --all-features
