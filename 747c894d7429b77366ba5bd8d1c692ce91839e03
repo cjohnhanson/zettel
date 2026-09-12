@@ -1,0 +1,14 @@
+Review record for two changes: the missouri install step, and the race
+in the gate test helper.
+
+The first replaces one install command in the release workflow with the
+action that already installs missouri on every pull request. The second
+accepts a broken pipe in the test helper that drives the gate's
+configuration refusals. No product code changes. The driver verified
+both directly. Each line states what was checked.
+
+signoff[review-tests] PASS 747c894 `cargo test --test merge_gate_guard` runs green here after the change, and the case that failed in the release check is the one the change covers, "the ref line writes: Broken pipe" with the other eleven green; the assertion narrows rather than widens, because only `ErrorKind::BrokenPipe` passes and every other error still fails the test; no test reads a workflow file, so the workflow half was exercised by a dispatch of the release workflow on this branch, which runs every build job and skips every publish job
+signoff[review-code] PASS 747c894 the missouri action was read at cjohnhanson/missouri action.yml, and it runs `cargo install --git ... --rev <sha> --locked --root ~/.missouri-tools missouri`, which names the package cargo asked for; the verify job's step list was printed from the edited file with a YAML reader and the action sits before the suite run; the helper change is scoped to the one call site that can exit before it reads stdin, and the two helpers that run in a valid repository still treat any write error as a failure
+signoff[review-docs] PASS 747c894 each change carries a comment stating the cause: a fixture in missouri is itself a package with a binary, and the configuration checks run before the gate reads stdin; no document states the release workflow's install command or the helper's error handling
+signoff[review-deps] PASS 747c894 no manifest and no lockfile changes in either commit; the action is the one the pull request workflow already runs, and it pins missouri to a resolved sha rather than a floating branch, which is narrower than the command it replaces
+signoff[review-usability] PASS 747c894 no binary, help text or error message changes; the reader affected is whoever cuts the next tag, and what they met was a red verify job, once on a cargo error naming both packages and once on a race that reported a broken pipe rather than the refusal under test
