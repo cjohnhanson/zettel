@@ -1,0 +1,12 @@
+Review record for the version bump.
+
+The change edits two lines: the version in the manifest and the same
+version in the lockfile. No code, no dependency, and no document
+changes. The driver verified it directly. Each line states what was
+checked.
+
+signoff[review-tests] PASS 543c3c5 the commit gate ran cargo fmt and clippy clean on this commit, and the pre-push gate runs the suite and the missouri paths before the branch leaves this machine; a version number is read by no test, and the one mechanical failure mode of a bump is a lockfile that disagrees with the manifest, which the diff rules out because both lines changed together
+signoff[review-code] PASS 543c3c5 `git diff --stat` reports two files and one changed line in each, and the diff body is the version line alone; nothing else in either file moved
+signoff[review-docs] PASS 543c3c5 no document names a version number, because the README install commands take no version, pyproject declares the version dynamic, npm/generate.mjs reads it from the manifest, and flake.nix derives it through crane; that derivation is what the previous release added, and it is why this bump touches two files rather than five
+signoff[review-deps] PASS 543c3c5 no dependency is added, removed or moved, confirmed by the lockfile diff holding one line, which is this package's own version entry
+signoff[review-usability] PASS 543c3c5 no binary surface changes; the reader this affects is whoever installs the crate, and what they get is the same tool under a number the registry does not yet hold
