@@ -1,0 +1,12 @@
+Review record for the missouri install fix.
+
+The change replaces one install command in the release workflow with the
+action that already installs missouri on every pull request. No code, no
+dependency, and no user-facing surface changes. The driver verified it
+directly. Each line states what was checked.
+
+signoff[review-tests] PASS edd5e52 no test reads a workflow file, so the release run is the check; the failing tag run named the exact error, "multiple packages with binaries found: missouri, myproject", and the workflow is dispatched as a dry run on this branch before any tag moves, which runs every build job and skips every publish job
+signoff[review-code] PASS edd5e52 the action was read at cjohnhanson/missouri action.yml, and it runs `cargo install --git ... --rev <sha> --locked --root ~/.missouri-tools missouri`, which names the package cargo asked for and caches the result by sha; the step list of the verify job was printed from the edited file with a YAML reader, and the action sits before the suite run
+signoff[review-docs] PASS edd5e52 the step carries a comment naming the cause, that a fixture in missouri is itself a package with a binary, and no document states the release workflow's install command, so nothing else contradicts it
+signoff[review-deps] PASS edd5e52 no manifest and no lockfile changes; the action is the one the pull request workflow already runs, and it pins missouri to a resolved sha rather than a floating branch, which is a narrower dependency than the command it replaces
+signoff[review-usability] PASS edd5e52 no binary, help text or error message changes; the reader affected is whoever cuts the next tag, and what they met was a red verify job whose error named both packages and the flag that disambiguates them
