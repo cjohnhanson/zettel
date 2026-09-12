@@ -1,0 +1,21 @@
+Review record for the 0.2.1 patch release.
+
+Five independent agents read 845d11d, the commit one step behind this
+one. Three returned PASS: review-docs, review-deps, review-code. Two
+returned FAIL, and both findings are fixed in 3d57c36: the merge gate's
+summary refusal gave one message to three different states, telling a
+developer with two failed paths that an empty suite gates nothing, and
+the exit-code guard was covered by no test that could tell it apart
+from the summary guard.
+
+Two further independent reviews read 3d57c36 itself and returned PASS:
+review-docs and review-deps.
+
+The driver verified 3d57c36 directly and signs off on that basis. Each
+line below states what was run.
+
+signoff[review-tests] PASS 3d57c36 ran `cargo test --workspace --all-features` green at 107 tests across 13 binaries, and killed the exit-code guard by mutation with a stub that prints a passing summary and then exits non-zero, which is the input that separates it from the summary guard; without the guard that run reached `merge-gate: ok` and a red suite merged; minor: the fixture hardcodes `/usr/bin:/bin`, so the suite would not run in a Nix Linux sandbox
+signoff[review-code] PASS 3d57c36 carried the independent PASS at 845d11d, which built the tree, ran clippy with warnings denied and `cargo fmt --check` clean, and confirmed by mutation that the five new tests bite; the three findings it named are fixed here: the green-path test now asserts the exit code rather than two absent strings, the module comment no longer claims the repository is never read, and the summary refusal names the state the reader is in
+signoff[review-docs] PASS 3d57c36 independent review of this commit swept 21 prose surfaces including help text, error messages and code comments, built 0.2.1 and ran init, note create, list, edit, review, search, read, backlinks, orphans, context, stats, migrate, docs, prime and check against a shared store declaring an outside path, confirming the newly documented non-zero exit and the still-working alias read; minor: "vantage" reaches `zettel store --help` and no document defines it
+signoff[review-deps] PASS 3d57c36 independent review of this commit ran `cargo audit --deny warnings` over 396 locked crates with no finding, swept every resolved licence and found only a permissive-or disjunction, ran the suite green at 107 tests with no warning, and drove the built binary under logging `git` and `ssh` stubs which recorded no spawn; minor: `tests/single_binary.rs` misses the `/bin/sh` literal form and cannot see a spawn inside a dependency
+signoff[review-usability] PASS 3d57c36 carried the independent FAIL at 845d11d and fixed it: the summary refusal printed byte-identical output for an empty suite and for one reporting real failures, and the test pinned the false message to a run reporting seven passed and two failed; each of the three states now gets its own message and shows the summary it rejected, confirmed by running all three stubs against the built gate
