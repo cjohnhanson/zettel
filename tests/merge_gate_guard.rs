@@ -310,15 +310,22 @@ fn run_gate_in(required: &[&str], vendored: &[&str]) -> (i32, String) {
         .stderr(Stdio::piped())
         .spawn()
         .expect("merge-gate.sh runs");
-    child
-        .stdin
-        .as_mut()
-        .expect("stdin is piped")
-        .write_all(
-            format!("refs/heads/topic {NOTELESS} refs/heads/main 0000000000000000000000000000000000000000\n")
-                .as_bytes(),
+    // Every refusal this helper drives comes from the configuration
+    // checks, and those run before the gate reads stdin. The gate can
+    // therefore exit, and close the pipe, before this write lands. A
+    // broken pipe is the refusal under test, so only that kind passes.
+    if let Err(e) = child.stdin.as_mut().expect("stdin is piped").write_all(
+        format!(
+            "refs/heads/topic {NOTELESS} refs/heads/main 0000000000000000000000000000000000000000\n"
         )
-        .expect("the ref line writes");
+        .as_bytes(),
+    ) {
+        assert_eq!(
+            e.kind(),
+            std::io::ErrorKind::BrokenPipe,
+            "the ref line writes: {e}"
+        );
+    }
     let out = child.wait_with_output().expect("the gate finishes");
     let text =
         String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
