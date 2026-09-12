@@ -1,4 +1,5 @@
-//! The short name, so `uvx zttl` and `npx zttl` work.
+//! The short name, so `uvx zttl` works. On npm the wrapper carries the
+//! scope, so the same run reads `npx @cjohnhanson/zttl`.
 //!
 //! maturin ties an installed command name to the Cargo bin name, and
 //! refuses a `[project.scripts]` entry beside a binary. A wheel
