@@ -71,8 +71,10 @@ change a note in a dependency store, run the command from that store.
 
 If other users clone your store, declare `shared: true`. `zettel check`
 then names every declaration that another clone could not follow, such
-as a path outside the repository. It reports them and refuses nothing,
-because the declaring machine can still resolve them.
+as a path outside the repository. It counts each one as a problem and
+exits non-zero, so a hook or a continuous-integration step stops on it.
+Reads through the alias still work on the declaring machine, because
+that machine can resolve the path.
 
 ## What it is for
 

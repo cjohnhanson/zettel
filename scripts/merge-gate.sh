@@ -93,12 +93,33 @@ if [ -d tests/missouri ] && { [ -z "${MERGE_GATE_SKIP_TESTS:-}" ] || [ -z "${CAR
 		exit 1
 	}
 	# The exit code decides. The summary check adds a second gate: the
-	# run must show one or more passed paths and zero failures. An empty
-	# suite does not pass.
-	printf '%s\n' "$out" | grep -E '[1-9][0-9]* passed, 0 failed' >&2 || {
+	# run must show one or more passed paths and zero failures.
+	#
+	# Three states reach here and each gets its own answer. One message
+	# served all three, and it said "an empty suite gates nothing" to a
+	# developer looking at two failed paths, which sends them to write a
+	# test rather than to fix the two.
+	summary=$(printf '%s\n' "$out" | grep -E '[0-9]+ passed, [0-9]+ failed' | tail -1)
+	if [ -z "$summary" ]; then
+		echo "merge-gate: the suite printed no summary line, so nothing says it ran." >&2
+		printf '%s\n' "$out" | tail -20 >&2
+		exit 1
+	fi
+	case "$summary" in
+	*", 0 failed"*) ;;
+	*)
+		echo "merge-gate: the suite reported failures. Nothing merges on a red suite." >&2
+		echo "  $summary" >&2
+		printf '%s\n' "$out" | tail -20 >&2
+		exit 1
+		;;
+	esac
+	printf '%s\n' "$summary" | grep -qE '[1-9][0-9]* passed' || {
 		echo "merge-gate: the suite reported no passing path. An empty suite gates nothing." >&2
+		echo "  $summary" >&2
 		exit 1
 	}
+	echo "merge-gate: $summary"
 fi
 
 # A pull request event checks out a merge commit GitHub creates. No
