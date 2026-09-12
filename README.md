@@ -16,21 +16,21 @@ they stand behind.
 The package is `zttl`, because `zettel` was taken on every registry. The
 command is `zettel`, and both names install together.
 
-Not released yet. Until the first tag, build from source:
-
-```sh
-cargo install --locked --git https://github.com/cjohnhanson/zettel
-```
-
-Requires Rust 1.88 and a C compiler. macOS and Linux, x86-64 and arm64.
-
-From the first release onward:
-
 ```sh
 cargo install --locked zttl
 brew install cjohnhanson/tap/zettel
 uv tool install zttl
 npm install -g zttl
+```
+
+`cargo install` builds from source. It needs Rust 1.88 and a C
+compiler. The other three carry a prebuilt binary for macOS and Linux,
+x86-64 and arm64, published by a tagged release.
+
+To build the unreleased `main` branch:
+
+```sh
+cargo install --locked --git https://github.com/cjohnhanson/zettel
 ```
 
 Or run it without installing:
