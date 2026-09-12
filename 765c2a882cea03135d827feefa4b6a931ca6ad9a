@@ -1,0 +1,18 @@
+Carried from 5be4f1c, which the pull request squashed to 765c2a8. Both
+commits name the same tree, so these sign-offs read what main holds.
+
+Review record for three changes on this branch: the missouri install
+step, the race in the gate test helper, and the version bump.
+
+The first replaces one install command in the release workflow with the
+action that already installs missouri on every pull request. The second
+accepts a broken pipe in the test helper that drives the gate's
+configuration refusals. The third edits the version in the manifest and
+the lockfile. No product code changes. The driver verified all three
+directly. Each line states what was checked.
+
+signoff[review-tests] PASS 765c2a8 `cargo test --test merge_gate_guard` runs green here after the helper change, and the case that failed in the release check is the one it covers, "the ref line writes: Broken pipe" with the other eleven green; the assertion narrows rather than widens, because only `ErrorKind::BrokenPipe` passes and every other error still fails; the pre-push gate runs the whole suite and the missouri paths before this branch leaves the machine; no test reads a workflow file or a version number, so the workflow half was exercised by a dispatch of the release workflow on this branch, which ran verify, build, wheels, sdist and the npm assembly and skipped every publish job
+signoff[review-code] PASS 765c2a8 the missouri action was read at cjohnhanson/missouri action.yml, and it runs `cargo install --git ... --rev <sha> --locked --root ~/.missouri-tools missouri`, which names the package cargo asked for; the verify job's step list was printed from the edited file with a YAML reader, and both actions sit before the steps that need them; the helper change is scoped to the one call site that can exit before it reads stdin, and the helpers that run in a valid repository still treat any write error as a failure; the bump diff is two files and one line in each
+signoff[review-docs] PASS 765c2a8 each change carries a comment stating its cause: a fixture in missouri is itself a package with a binary, and the configuration checks run before the gate reads stdin; no document states the release workflow's install commands, the helper's error handling, or a version number, because the README install commands take no version and every other file derives it from the manifest
+signoff[review-deps] PASS 765c2a8 no dependency is added, removed or moved; the lockfile diff holds one line, which is this package's own version entry; the missouri action pins a resolved commit rather than a floating branch, so it is a narrower dependency than the command it replaces
+signoff[review-usability] PASS 765c2a8 no binary, help text or error message changes; the reader affected is whoever cuts the next tag, and what they met was a red verify job three times: once on a missing gaff, once on a cargo error naming two packages, and once on a race that reported a broken pipe rather than the refusal under test
