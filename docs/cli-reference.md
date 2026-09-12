@@ -1,10 +1,10 @@
 <!-- metadata
-title: "zettel CLI Reference"
+title: "zettel CLI reference"
 description: "Complete command reference for the zettel knowledge base"
 type: reference
 -->
 
-# zettel CLI Reference
+# zettel CLI reference
 
 ```
 zettel <command>
@@ -12,7 +12,7 @@ zettel <command>
 
 Zettelkasten note management on frontmattered markdown.
 
-## Global Options
+## Global options
 
 `--root <dir>` — Store directory, literal: the directory must hold `zettel.yml`; no walk, no fallback.
 
@@ -26,12 +26,12 @@ Zettelkasten note management on frontmattered markdown.
 
 Without `--root`, a command finds its store by one rule, identical in
 tisket and almanac: the nearest `zettel.yml` at or above the working
-directory wins. The walk requires a regular file and stops at the first
+directory wins. The walk requires a regular file. It stops at the first
 directory the invoking user does not own, so a marker planted in a
 shared ancestor captures nothing. With no store found, a read falls
 back to the root store set in `~/.config/zettel/config.yml` and says
-so on stderr; a write never falls back — it fails and names `--home`.
-No environment variable participates: an env var is the one input an
+so on stderr. A write never falls back. It fails and names `--home`.
+No environment variable participates: a variable is the one input an
 agent cannot see in a transcript, and a repository can set one through
 direnv or mise. The config path itself is fixed, and the home directory
 comes from the passwd database, not `$HOME`, for the same reason.
@@ -68,7 +68,7 @@ List the notes. The default lists all notes.
 | `--tag <tag>` | `-t` | | Filter by tag |
 | `--provenance <tokens>` | `-p` | | Filter by provenance tokens, separated with commas: `human`, `agent`, `agent:inference`, `citation`, `reviewed`, `unknown`. A note matches when any span matches any token |
 | `--unreviewed` | | | Keep only the notes with unreviewed agent content |
-| `--where <selector>` | | | Filter by selector (`namespace:value`). Repeat the option to add selectors. Zettel combines them with AND. The `provenance` namespace takes the same tokens |
+| `--where <selector>` | | | Filter by selector (`namespace:value`). The namespaces are `tag`, `provenance`, and `link`. Repeat the option to add selectors. Zettel combines them with AND. The `provenance` namespace takes the same tokens |
 | `--format <fmt>` | | `text` | The output format: `text` or `json` |
 
 Text output columns: `ID`, `PROVENANCE`, `[TAGS]`, `TITLE`.
@@ -101,7 +101,7 @@ Edit a note. Zettel changes only the fields you give.
 | `--links <csv>` | `-l` | Replace all links; separate them with commas |
 | `--add-link <id>` | | Add one link and keep the existing links |
 | `--remove-link <id>` | | Remove one link and keep the other links |
-| `--body <text>` | | Replace the whole body |
+| `--body <text>` | `-b` | Replace the whole body |
 | `--append <text>` | | Append text to the body |
 
 Zettel sets the `updated` timestamp automatically.
@@ -134,7 +134,7 @@ qualifier drops it.
 
 ---
 
-## Graph Commands
+## Graph commands
 
 ### `zettel backlinks <id>`
 
@@ -159,11 +159,11 @@ Show a note and the linked notes within N hops.
 
 ---
 
-## Search and Read
+## Search and read
 
 ### `zettel search <pattern>`
 
-Search the notes with a regex pattern. Zettel matches the frontmatter fields and the body.
+Search the notes with a regex pattern. Zettel matches the title, the tags, and the body. The pattern matches case; `(?i)` at the front turns that off.
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
@@ -218,8 +218,9 @@ Show or set the root store that reads fall back to. `zettel store root`
 prints the current setting; `zettel store root <path>` writes it to
 `~/.config/zettel/config.yml` (the path must hold `zettel.yml`;
 changing an existing setting needs `--force`). Each tool reads its own
-file, so this one names the root store for zettel alone. One private repo
-can still serve all three, named once in each.
+file, so this one names the root store for zettel alone. One private
+repository can be the root store for zettel, tisket, and almanac at
+once, named once in each tool's config file.
 
 ## `zettel store sync`
 
@@ -227,6 +228,13 @@ Fetch each declared remote store into the local cache. This is the only
 command that reaches the network. Every other command reads what the
 cache already holds, so an answer never changes because of a fetch that
 you did not ask for.
+
+Each store syncs on its own, and one failure never stops another. The
+command prints a line for each, then exits non-zero if any failed. A
+store fails when its source is unreachable, and also when its declared
+revision is absent from what arrived. Both checks run before the
+command calls a store synced. A fetch that moved bytes without the
+revision fails here, not on a later read.
 
 A git store keeps one bare clone for each URL, and its notes are read
 from git objects at the revision that each store declares. Two stores
@@ -238,7 +246,8 @@ it; declare the store with https. A blob store is an https prefix that
 publishes an `index.txt`; sync fetches the index and each document by
 GET. `s3://` and `gs://` are refused.
 
-`store list` gives the age of each cache, so a stale answer looks stale.
+`store list` prints the age of each cache, so a reader can tell how old
+an answer is.
 
 ## The registry
 
@@ -252,12 +261,10 @@ stores:
     path: ~/Projects/handbook
 ```
 
-The registry changes where a dependency resolves. It does not change
-what a store declares.
-
-It does change what a command reads. The checkout answers for the
-declared source, including for a pinned revision, so a command can read
-a note that is only in that working tree. `zettel store list` marks a
+A store's declarations stay as written. The registry redirects where
+each declared source resolves, so the checkout answers for that source,
+pinned revision included. A command can then read a note that is only
+in that working tree. `zettel store list` marks a
 row the registry bound, and `zettel check` reports a reference that
 resolves only through the checkout: that reference works here and
 nowhere else.
@@ -313,6 +320,7 @@ zettel docs                    List the available docs and their slugs
 zettel docs list               Do the same as bare `zettel docs`
 zettel docs <identifier>       Print a doc by slug, title, or unique prefix
 zettel docs search <query>     Search all docs
+zettel docs --all              Print every page whole, in one stream
 ```
 ---
 
@@ -322,7 +330,7 @@ Serve this knowledge base over the Model Context Protocol.
 
 ```
 zettel serve                        Speak MCP on stdin and stdout
-zettel serve --root <DIR>           Serve the store at DIR (default: .)
+zettel serve --root <DIR>           Serve the store at DIR
 zettel serve --bind <ADDR>          Serve over HTTP at ADDR instead
 zettel serve --surfaces <LIST>      Offer these surfaces (default: resources,tools)
 zettel serve --access <MODE>        read-only (default) or read-write

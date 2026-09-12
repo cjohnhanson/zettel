@@ -1,7 +1,14 @@
 [package]
-name = "zettel"
+# The registry name, because `zettel` is taken on crates.io, PyPI and
+# npm alike. The binary keeps the typed name; see [[bin]] below.
+name = "zttl"
 version = "0.2.0"
 edition = "2024"
+# 1.88, read from the graph rather than from the edition. Edition 2024
+# needs 1.85, and that floor is too low here: a locked dependency asks
+# for 1.88 itself. A floor that is too low is worse than none, because a
+# consumer takes it and meets an error from inside the crate anyway.
+rust-version = "1.88"
 description = "Zettelkasten note management on frontmattered markdown"
 license = "MIT"
 repository = "https://github.com/cjohnhanson/zettel"
@@ -14,6 +21,17 @@ categories = ["command-line-utilities", "text-processing"]
 # Repository machinery belongs on GitHub. A consumer installing the
 # crate gets the source, the license, and the README.
 exclude = [
+    # The npm wrapper and its generator are release machinery. The
+    # generated platform packages each hold a built binary, and one of
+    # those reached a crate before this line existed.
+    "npm/",
+    # Drives npm/, dropped above, so it cannot run from the tarball.
+    "tests/npm_wrapper_platforms.rs",
+    # These read .github/ and npm/, both dropped.
+    "tests/release_workflow.rs",
+    "tests/review_gate_workflow.rs",
+    "tests/npm_generate.rs",
+    "tests/common/",
     ".tisket/",
     "tisket.yml",
     ".zettel/",
@@ -22,8 +40,9 @@ exclude = [
     ".github/",
     ".agents/",
     "scripts/",
-    # Shells out to scripts/merge-gate.sh, which the line above drops.
+    # These run scripts/, which the line above drops.
     "tests/merge_gate_guard.rs",
+    "tests/prepublish_gate.rs",
     "tests/missouri/",
     "CONTRIBUTING.md",
     "AGENTS.md",
@@ -31,12 +50,28 @@ exclude = [
     "rust-toolchain.toml",
 ]
 
+# Two names, one build. `zettel` is what a person types. `zttl` exists
+# because the registries that matter for `uvx` and `npx` needed a free
+# name, and maturin ties the installed command to the Cargo bin name.
+# The registry name differs from the name this crate's own source
+# imports. The lib keeps the imported name, so no `use` changes.
+[lib]
+name = "zettel"
+
+[[bin]]
+name = "zettel"
+path = "src/main.rs"
+
+[[bin]]
+name = "zttl"
+path = "src/bin/zttl.rs"
+
 [dependencies]
 camino = { version = "1", features = ["serde1"] }
 clap = { version = "4", features = ["derive", "env", "unicode", "wrap_help"] }
 clap_complete = "4"
 clap_mangen = "0.2"
-mdstore = { git = "https://github.com/cjohnhanson/mdstore", rev = "ea739c4", features = ["mcp"] }
+mdstore = { version = "0.5", package = "mdstore-core", features = ["mcp"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 yaml_serde = "0.10"
@@ -47,3 +82,28 @@ rmcp = { version = "3", features = ["server", "transport-io", "transport-streama
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "signal", "net"] }
 axum = "0.8"
 sigpipe = "0.1.3"
+diataxis = { version = "0.1", default-features = false, features = ["cli"] }
+
+# The docs pages are generated at build time from the same
+# documentation set the `docs` subcommand reads.
+[build-dependencies]
+diataxis = { version = "0.1", default-features = false, features = ["build"] }
+
+# `cargo deb` reads this. It produces target/debian/*.deb, which the
+# release attaches to the GitHub release. Installing that file is
+# `dpkg -i`, and it is not an apt repository: `apt-get install zettel`
+# needs a hosted, signed repository that does not exist yet.
+[package.metadata.deb]
+maintainer = "cjohnhanson <cody@codyjhanson.com>"
+section = "utils"
+priority = "optional"
+depends = "$auto"
+extended-description = "Zettelkasten note management on frontmattered markdown"
+assets = [
+    ["target/release/zettel", "usr/bin/", "755"],
+    # The short name ships too, so the rule holds on apt: install under
+    # one name and both commands work.
+    ["target/release/zttl", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/zettel/README", "644"],
+    ["LICENSE", "usr/share/doc/zettel/LICENSE", "644"],
+]
