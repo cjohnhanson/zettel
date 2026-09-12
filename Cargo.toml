@@ -2,7 +2,7 @@
 # The registry name, because `zettel` is taken on crates.io, PyPI and
 # npm alike. The binary keeps the typed name; see [[bin]] below.
 name = "zttl"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2024"
 # 1.88, read from the graph rather than from the edition. Edition 2024
 # needs 1.85, and that floor is too low here: a locked dependency asks

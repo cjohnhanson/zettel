@@ -13,14 +13,16 @@ they stand behind.
 
 ## Install
 
-The package is `zttl`, because `zettel` was taken on every registry. The
-command is `zettel`, and both names install together.
+The package is `zttl`, because `zettel` was taken on every registry. On
+npm it is `@cjohnhanson/zttl`, because the registry refuses `zttl` as
+too close to names it already holds. The command is `zettel`, and both
+names install together.
 
 ```sh
 cargo install --locked zttl
 brew install cjohnhanson/tap/zettel
 uv tool install zttl
-npm install -g zttl
+npm install -g @cjohnhanson/zttl
 ```
 
 `cargo install` builds from source. It needs Rust 1.88 and a C
@@ -37,7 +39,7 @@ Or run it without installing:
 
 ```sh
 uvx zttl read
-npx zttl read
+npx @cjohnhanson/zttl read
 ```
 
 A release also carries prebuilt archives and a `.deb`, on the [releases

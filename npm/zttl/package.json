@@ -1,5 +1,5 @@
 {
-	"name": "zttl",
+	"name": "@cjohnhanson/zttl",
 	"description": "Zettelkasten note management on frontmattered markdown",
 	"bin": {
 		"zttl": "bin/run.js",
