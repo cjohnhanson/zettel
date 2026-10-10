@@ -52,6 +52,11 @@ The command fails if `zettel.yml` already exists.
 
 Create a note. Zettel prints the new note ID to stdout.
 
+The ID is a random four-character prefix and a slug of the title, for
+example `a3f2-my-first-note`. A slug longer than 100 bytes is cut at
+the last word that fits. The command fails when another note already
+uses the slug.
+
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--tag <csv>` | `-t` | | The tags; separate them with commas |
