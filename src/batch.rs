@@ -1477,6 +1477,143 @@ mod tests {
         );
     }
 
+    fn set_body(s: &Store, id: &str, body: &str) {
+        s.repo
+            .edit_note(
+                id,
+                EditNoteOptions {
+                    body: Some(body),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+
+    fn upsert_once(s: &Store, r: NoteRecord) -> Upserted {
+        s.repo.keyed_batch("url").unwrap().upsert(r).unwrap()
+    }
+
+    #[test]
+    fn a_record_revised_twice_updates_both_times() {
+        let s = Store::new("revisedtwice");
+        let id = load(&s, &record("u", "T", "x"));
+        for body in ["y", "z"] {
+            assert_eq!(
+                upsert_once(&s, record("u", "T", body)),
+                Upserted::Updated(id.clone()),
+                "revising to {body}"
+            );
+            assert_eq!(s.repo.find_note(&id).unwrap().body, body);
+        }
+    }
+
+    #[test]
+    fn a_body_accepted_from_the_source_takes_the_next_revision() {
+        let s = Store::new("acceptedthen");
+        let id = load(&s, &record("u", "T", "loaded"));
+        set_body(&s, &id, "revised");
+        assert_eq!(
+            upsert_once(&s, record("u", "T", "revised")),
+            Upserted::Updated(id.clone())
+        );
+        assert_eq!(
+            upsert_once(&s, record("u", "T", "revised")),
+            Upserted::Unchanged(id.clone())
+        );
+        assert_eq!(
+            upsert_once(&s, record("u", "T", "final")),
+            Upserted::Updated(id.clone())
+        );
+        assert_eq!(s.repo.find_note(&id).unwrap().body, "final");
+    }
+
+    #[test]
+    fn what_the_source_added_in_one_run_it_can_drop_in_the_next() {
+        let s = Store::new("addthendrop");
+        let r = record("u", "T", "text");
+        let id = load(&s, &r);
+        let mut added = r.clone();
+        added.tags.push("later".into());
+        added.links.push("aaaa-project".into());
+        added.fields.insert("blurb".into(), "acme".into());
+        assert_eq!(upsert_once(&s, added), Upserted::Updated(id.clone()));
+        let fm = s.repo.find_note(&id).unwrap().frontmatter;
+        assert_eq!(fm.tags, vec!["reading", "later"]);
+        assert_eq!(fm.links, vec!["aaaa-project"]);
+        assert!(fm.extra.contains_key("blurb"));
+
+        assert_eq!(upsert_once(&s, r), Upserted::Updated(id.clone()));
+        let fm = s.repo.find_note(&id).unwrap().frontmatter;
+        assert_eq!(fm.tags, vec!["reading"], "a dropped tag stayed");
+        assert!(fm.links.is_empty(), "a dropped link stayed");
+        assert!(!fm.extra.contains_key("blurb"), "a dropped field stayed");
+    }
+
+    #[test]
+    fn a_body_taken_from_the_source_gets_the_new_spec() {
+        let s = Store::new("takenspec");
+        let id = load(&s, &record("u", "T", "loaded"));
+        set_body(&s, &id, "revised");
+        let mut r = record("u", "T", "revised");
+        r.provenance = Some("citation src=https://example.com/acme".into());
+        assert_eq!(upsert_once(&s, r), Upserted::Updated(id.clone()));
+        assert_eq!(
+            s.repo
+                .find_note(&id)
+                .unwrap()
+                .frontmatter
+                .provenance
+                .as_deref(),
+            Some("citation src=https://example.com/acme")
+        );
+    }
+
+    #[test]
+    fn field_order_does_not_change_a_record() {
+        let s = Store::new("fieldorder");
+        let r = record("u", "T", "text");
+        let id = load(&s, &r);
+        let mut reordered = r.clone();
+        reordered.fields = Mapping::new();
+        reordered.fields.insert("outlet".into(), "Example".into());
+        reordered.fields.insert("url".into(), "u".into());
+        let text = s.text(&id);
+        let mtime = s.mtime(&id);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert_eq!(upsert_once(&s, reordered), Upserted::Unchanged(id.clone()));
+        assert_eq!(s.mtime(&id), mtime, "a reordered record rewrote the file");
+        assert_eq!(s.text(&id), text);
+    }
+
+    #[test]
+    fn an_update_moves_the_updated_timestamp() {
+        let s = Store::new("timestamp");
+        let id = load(&s, &record("u", "T", "text"));
+        let old = "2020-01-01T00:00:00Z";
+        let text = s.text(&id);
+        let line = text
+            .lines()
+            .find(|l| l.starts_with("updated:"))
+            .unwrap()
+            .to_string();
+        std::fs::write(s.path(&id), text.replace(&line, &format!("updated: {old}"))).unwrap();
+        assert_eq!(
+            s.repo
+                .find_note(&id)
+                .unwrap()
+                .frontmatter
+                .updated
+                .as_deref(),
+            Some(old)
+        );
+        assert_eq!(
+            upsert_once(&s, record("u", "New title", "text")),
+            Upserted::Updated(id.clone())
+        );
+        let updated = s.repo.find_note(&id).unwrap().frontmatter.updated;
+        assert_ne!(updated.as_deref(), Some(old), "the timestamp did not move");
+    }
+
     #[test]
     fn a_word_that_ends_at_the_limit_is_kept_whole() {
         let title = format!("x {} b", "a".repeat(98));
