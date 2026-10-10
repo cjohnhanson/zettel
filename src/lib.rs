@@ -6,6 +6,7 @@ pub const TOOL: mdstore::ToolName<'static> = match mdstore::ToolName::new("zette
     None => panic!("the tool name must be one plain path component"),
 };
 
+pub mod batch;
 pub mod cli;
 pub mod config;
 pub mod error;
@@ -17,6 +18,7 @@ pub mod selector;
 pub mod serve;
 pub mod workspace;
 
+pub use batch::{ConflictReason, KeyedBatch, NoteRecord, Upserted};
 pub use config::ZettelConfig;
 pub use error::{Error, Result};
 pub use note::{Note, NoteFrontmatter};

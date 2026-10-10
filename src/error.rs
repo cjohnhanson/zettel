@@ -47,6 +47,24 @@ pub enum Error {
     #[error("unknown field '{0}'")]
     UnknownField(String),
 
+    #[error("the record has no string value for the key field '{0}'")]
+    MissingKey(String),
+
+    #[error(
+        "the key value '{value}' is held by more than one note: {}. Remove the key from all but one",
+        ids.join(", ")
+    )]
+    DuplicateKey { value: String, ids: Vec<String> },
+
+    #[error("zettel owns the field name '{0}'; use another name")]
+    ReservedField(String),
+
+    #[error("a field name must be non-empty text, not {0}")]
+    InvalidFieldName(String),
+
+    #[error("note '{id}' cannot be read: {reason}. Fix or remove the note, then run again")]
+    UnreadableNote { id: String, reason: String },
+
     #[error("{0}")]
     Io(#[from] std::io::Error),
 

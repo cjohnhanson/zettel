@@ -4,7 +4,15 @@ use crate::config::ZettelConfig;
 use crate::error::{Error, Result};
 use crate::note::{self, Note, NoteFrontmatter};
 
-use mdstore::slug::{extract_prefix, generate_prefix, slugify};
+use mdstore::slug::extract_prefix;
+
+#[cfg(test)]
+thread_local! {
+    /// How many times this thread listed a note directory. A test reads
+    /// it to prove that a batch lists the store once, however many
+    /// notes it writes.
+    pub(crate) static LISTINGS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 #[derive(Default)]
 pub struct CreateNoteOptions {
@@ -157,7 +165,7 @@ impl Repo {
     /// bookkeeping, not a guard: Utf8Path::join is lexical, so a path
     /// built from an escaping id strips cleanly back to the escaping
     /// name. The handle is what refuses it.
-    fn read_note_file(&self, path: &Utf8Path) -> Result<String> {
+    pub(crate) fn read_note_file(&self, path: &Utf8Path) -> Result<String> {
         let rel = self.relative(path);
         self.notes()?
             .read(&rel)
@@ -165,7 +173,7 @@ impl Repo {
     }
 
     /// Write one note through the handle.
-    fn write_note_file(&self, path: &Utf8Path, contents: &str) -> Result<()> {
+    pub(crate) fn write_note_file(&self, path: &Utf8Path, contents: &str) -> Result<()> {
         let rel = self.relative(path);
         // A write creates the note directory when it is absent, so a
         // store becomes real on its first note rather than on its
@@ -190,7 +198,9 @@ impl Repo {
     }
 
     /// Every note stem in this store, through the handle.
-    fn note_stems(&self) -> Result<Vec<String>> {
+    pub(crate) fn note_stems(&self) -> Result<Vec<String>> {
+        #[cfg(test)]
+        LISTINGS.with(|n| n.set(n.get() + 1));
         // A store with no note directory yet holds no notes. That is
         // an empty store, not a failure.
         //
@@ -208,6 +218,11 @@ impl Repo {
 
     pub fn zettel_dir(&self) -> Utf8PathBuf {
         self.notes_dir.clone()
+    }
+
+    /// The path of the note with this id.
+    pub(crate) fn note_path(&self, id: &str) -> Utf8PathBuf {
+        self.notes_dir.join(format!("{id}.md"))
     }
 
     // -- Init --
@@ -294,49 +309,27 @@ impl Repo {
         Ok(())
     }
 
-    fn collect_existing_prefixes(&self) -> Result<Vec<String>> {
-        let mut prefixes = Vec::new();
-        for stem in self.note_stems()? {
-            if let Some((prefix, _)) = extract_prefix(&stem)
-                && !prefixes.iter().any(|p: &String| p == prefix)
-            {
-                prefixes.push(prefix.to_string());
-            }
-        }
-        Ok(prefixes)
-    }
-
-    fn slug_exists(&self, slug: &str) -> Result<bool> {
-        for stem in self.note_stems()? {
-            {
-                let stem = stem.as_str();
-                if let Some((_, file_slug)) = extract_prefix(stem) {
-                    if file_slug == slug {
-                        return Ok(true);
-                    }
-                } else if stem == slug {
-                    return Ok(true);
-                }
-            }
-        }
-        Ok(false)
-    }
-
     // -- Notes --
 
+    /// Create one note.
+    ///
+    /// Each call lists the store once. To load many notes from a source
+    /// whose records carry a key, such as a URL, use
+    /// [`Repo::keyed_batch`]. It lists the store once for the whole run.
     pub fn create_note(&self, title: &str, opts: CreateNoteOptions) -> Result<String> {
-        let slug = slugify(title);
+        crate::batch::Batch::open(self)?.create(title, opts)
+    }
 
-        if self.slug_exists(&slug)? {
-            return Err(Error::NoteAlreadyExists(slug));
-        }
-
-        let existing_prefixes = self.collect_existing_prefixes()?;
-        let prefix = generate_prefix(&existing_prefixes);
-        let id = format!("{prefix}-{slug}");
-
-        let dir = self.zettel_dir();
-        let note_path = dir.join(format!("{id}.md"));
+    /// Write a new note under an id a batch has already claimed.
+    ///
+    /// The batch decides the id. This builds and checks the content.
+    pub(crate) fn write_new_note(
+        &self,
+        id: &str,
+        title: &str,
+        opts: CreateNoteOptions,
+    ) -> Result<()> {
+        let note_path = self.note_path(id);
 
         let mut fm = note::new_frontmatter(title);
         if let Some(spec) = opts.provenance {
@@ -357,9 +350,7 @@ impl Repo {
         crate::provenance::resolve_spans(fm.provenance.as_deref(), body)?;
         crate::provenance::refuse_authored_stamps(body)?;
         let content = note::serialize_note(&fm, body);
-        self.write_note_file(&note_path, &content)?;
-
-        Ok(id)
+        self.write_note_file(&note_path, &content)
     }
 
     pub fn list_notes(&self, filter: &ListNotesFilter<'_>) -> Result<Vec<Note>> {
