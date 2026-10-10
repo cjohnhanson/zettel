@@ -709,6 +709,13 @@ mod tests {
             std::fs::read_to_string(self.path(id)).unwrap()
         }
 
+        fn mtime(&self, id: &str) -> std::time::SystemTime {
+            std::fs::metadata(self.path(id))
+                .unwrap()
+                .modified()
+                .unwrap()
+        }
+
         fn plant(&self, name: &str, text: &str) {
             std::fs::write(self.base.join(format!(".zettel/{name}.md")), text).unwrap();
         }
@@ -1271,9 +1278,106 @@ mod tests {
         let first = b.upsert(record("u", "T", "revised")).unwrap();
         assert!(matches!(first, Upserted::Conflict { .. }), "{first:?}");
         let text = s.text(&id);
+        let mtime = s.mtime(&id);
+        std::thread::sleep(std::time::Duration::from_millis(50));
         let mut b = s.repo.keyed_batch("url").unwrap();
-        b.upsert(record("u", "T", "revised")).unwrap();
+        let second = b.upsert(record("u", "T", "revised")).unwrap();
+        assert!(matches!(second, Upserted::Conflict { .. }), "{second:?}");
+        assert_eq!(s.mtime(&id), mtime, "a standing conflict rewrote the file");
         assert_eq!(s.text(&id), text, "a standing conflict rewrote the note");
+    }
+
+    /// Load one record in its own batch and return the note's id.
+    fn load(s: &Store, r: &NoteRecord) -> String {
+        let mut b = s.repo.keyed_batch("url").unwrap();
+        let out = b.upsert(r.clone()).unwrap();
+        assert!(matches!(out, Upserted::Created(_)), "{out:?}");
+        id_of(&out).to_string()
+    }
+
+    #[test]
+    fn a_title_change_alone_is_an_update() {
+        let s = Store::new("titleonly");
+        let r = record("u", "Old title", "text");
+        let id = load(&s, &r);
+        let mut changed = r.clone();
+        changed.title = "New title".into();
+        let mut b = s.repo.keyed_batch("url").unwrap();
+        assert_eq!(b.upsert(changed).unwrap(), Upserted::Updated(id.clone()));
+        let n = s.repo.find_note(&id).unwrap();
+        assert_eq!(n.frontmatter.title, "New title");
+        assert_eq!(n.body, "text");
+    }
+
+    #[test]
+    fn a_tag_change_alone_is_an_update() {
+        let s = Store::new("tagonly");
+        let r = record("u", "T", "text");
+        let id = load(&s, &r);
+        let mut changed = r.clone();
+        changed.tags = vec!["reading".into(), "later".into()];
+        let mut b = s.repo.keyed_batch("url").unwrap();
+        assert_eq!(b.upsert(changed).unwrap(), Upserted::Updated(id.clone()));
+        let fm = s.repo.find_note(&id).unwrap().frontmatter;
+        assert_eq!(fm.tags, vec!["reading", "later"]);
+    }
+
+    #[test]
+    fn a_link_change_alone_is_an_update() {
+        let s = Store::new("linkonly");
+        let r = record("u", "T", "text");
+        let id = load(&s, &r);
+        let mut changed = r.clone();
+        changed.links = vec!["aaaa-project".into()];
+        let mut b = s.repo.keyed_batch("url").unwrap();
+        assert_eq!(b.upsert(changed).unwrap(), Upserted::Updated(id.clone()));
+        let fm = s.repo.find_note(&id).unwrap().frontmatter;
+        assert_eq!(fm.links, vec!["aaaa-project"]);
+    }
+
+    #[test]
+    fn a_provenance_change_alone_is_an_update() {
+        let s = Store::new("provonly");
+        let r = record("u", "T", "text");
+        let id = load(&s, &r);
+        let mut changed = r.clone();
+        changed.provenance = Some("citation src=https://example.com/acme".into());
+        let mut b = s.repo.keyed_batch("url").unwrap();
+        assert_eq!(b.upsert(changed).unwrap(), Upserted::Updated(id.clone()));
+        let n = s.repo.find_note(&id).unwrap();
+        assert_eq!(
+            n.frontmatter.provenance.as_deref(),
+            Some("citation src=https://example.com/acme")
+        );
+        assert_eq!(n.body, "text");
+    }
+
+    #[test]
+    fn an_updated_record_reruns_unchanged_in_a_new_batch() {
+        let s = Store::new("rerunafter");
+        let r = record("u", "T", "text");
+        let id = load(&s, &r);
+        let mut changed = r.clone();
+        changed.title = "New title".into();
+        changed.tags = vec!["later".into()];
+        changed.links = vec!["aaaa-project".into()];
+        changed.body = "revised".into();
+        changed.provenance = Some("citation src=https://example.com/acme".into());
+        {
+            let mut b = s.repo.keyed_batch("url").unwrap();
+            assert_eq!(
+                b.upsert(changed.clone()).unwrap(),
+                Upserted::Updated(id.clone())
+            );
+            assert_eq!(
+                b.upsert(changed.clone()).unwrap(),
+                Upserted::Unchanged(id.clone())
+            );
+        }
+        let text = s.text(&id);
+        let mut b = s.repo.keyed_batch("url").unwrap();
+        assert_eq!(b.upsert(changed).unwrap(), Upserted::Unchanged(id.clone()));
+        assert_eq!(s.text(&id), text, "an unchanged record rewrote its note");
     }
 
     #[test]
