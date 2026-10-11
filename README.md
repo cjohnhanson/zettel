@@ -31,8 +31,8 @@ On Debian or Ubuntu, download the `.deb` from the [releases
 page](https://github.com/cjohnhanson/zettel/releases) and install it:
 
 ```
-wget https://github.com/cjohnhanson/zettel/releases/download/v0.2.5/zttl_0.2.5-1_amd64.deb
-sudo dpkg -i zttl_0.2.5-1_amd64.deb
+wget https://github.com/cjohnhanson/zettel/releases/download/v0.3.0/zttl_0.3.0-1_amd64.deb
+sudo dpkg -i zttl_0.3.0-1_amd64.deb
 ```
 
 To run it once without installing anything:
