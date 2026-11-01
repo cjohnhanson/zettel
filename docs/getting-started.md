@@ -26,11 +26,14 @@ zettel_demo=$(mktemp -d)
 cd "$zettel_demo"
 git init
 zettel init
+printf '%s\n' "$zettel_demo"
 ```
 
 Zettel prints `initialized a zettel store at <path>`. It creates `zettel.yml` and the `.zettel/` directory. Keep this terminal in the practice repository for the remaining commands.
 
 ## Write a note with a body
+
+The command below labels the note as written by a human reader. If an agent runs the exercise, it must replace `-p human` with `-p agent:summary`. That note then joins the unreviewed list, and the later human-only read excludes it.
 
 Capture the generated ID in a shell variable:
 
@@ -44,7 +47,7 @@ zettel note show "$setup_note"
 
 The ID starts with four generated characters, followed by the title's slug. The show command prints the note's metadata and body. Open `.zettel/$setup_note.md` in your editor to inspect the same Markdown file.
 
-The `-p human` flag describes the source of this exercise note. An agent that writes its own summary must use `agent:summary`. Provenance labels identify how text was produced; they do not establish that it is correct.
+Provenance labels identify how text was produced; they do not establish that it is correct.
 
 Find the note by tag and by body text:
 
@@ -82,7 +85,7 @@ zettel note list --unreviewed
 zettel note review "$use_note"
 ```
 
-The list contains the inference note. The review output shows one numbered span with `agent:inference (default)` and a text preview. If the preview ends in `…`, read the full note with `zettel note show "$use_note"` before approving it.
+The list contains the inference note and any other notes with unreviewed agent content. The review output shows one numbered span with `agent:inference (default)` and a text preview. If the preview ends in `…`, read the full note with `zettel note show "$use_note"` before approving it.
 
 Read only the human-authored content:
 
@@ -90,7 +93,7 @@ Read only the human-authored content:
 zettel read --provenance human
 ```
 
-This returns the setup note's text and excludes the inference. A provenance filter selects content by its label; a human must still assess the claim.
+For a human-created setup note, this returns its text and excludes the inference. If an agent created both notes, the read returns no content. A provenance filter selects content by its label; a human must still assess the claim.
 
 If you are a human reader and accept the sample inference, approve it with your own reviewer name in place of `your-name`:
 
@@ -99,7 +102,7 @@ zettel note review "$use_note" --approve all --reviewer your-name
 zettel read --provenance human,reviewed
 ```
 
-The approval prints `1 span(s) approved`. The read now includes the inference along with the setup note. Only a human runs `--approve`. An agent following this tutorial must leave the inference unapproved and continue to the next section.
+The approval prints `1 span(s) approved`. The read now includes the approved inference. It also includes the setup note if that note has human provenance. Only a human runs `--approve`. An agent following this tutorial must leave the inference unapproved and continue to the next section.
 
 ## Keep the files for another session
 
