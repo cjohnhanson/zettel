@@ -133,6 +133,8 @@ The repository remains at `$zettel_demo`. In another terminal, change to that di
 
 Continue with a specific task:
 
+- [Use notes with your coding agent](how-to-use-notes-with-an-agent.md) in
+  an existing project, including reads in a fresh session.
 - [Review agent notes](how-to-review-agent-notes.md) before reusing their claims.
 - [Correct a finding](how-to-correct-a-finding.md) when the evidence changes.
 - [Repair broken links](how-to-repair-broken-links.md) when a target no longer resolves.

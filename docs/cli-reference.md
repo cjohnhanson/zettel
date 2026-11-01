@@ -274,8 +274,10 @@ row the registry bound, and `zettel check` reports a reference that
 resolves only through the checkout: that reference works here and
 nowhere else.
 
-A command reads all the declared stores. A command writes only to this
-store. A note in a dependency has the ID `alias:id`. A note in a
+Note lookups and graph queries can read declared stores. `search` and
+`read` operate on the current store only; run them from a dependency's
+root, or select that root with `--root`, to search or read its notes.
+A command writes only to this store. A note in a dependency has the ID `alias:id`. A note in a
 dependency of a dependency has the ID `alias/alias:id`. The commands
 accept that longer form for read operations only.
 
