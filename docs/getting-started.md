@@ -1,171 +1,131 @@
 <!-- metadata
 title: "Getting started with Zettel"
-description: "Initialize a knowledge base, create notes, link them, and explore the graph"
+description: "Create a repository knowledge base, link sample notes, and inspect their provenance before reuse."
 type: tutorial
 -->
 
 # Getting started with Zettel
 
-## Initialize
+Create a small knowledge base with linked notes and explicit provenance. The notes in this exercise describe Zettel itself. You can inspect every claim before using it in another session.
 
-Run this command from the project root:
+You need git, a bash or zsh terminal, and Zettel 0.3.0. Install the pinned version with Cargo if you have Rust 1.88 or newer and a C compiler:
 
-```bash
+```sh
+cargo install --locked zttl --version 0.3.0
+zettel --version
+```
+
+The version command prints `zettel 0.3.0`. If you do not use Rust, download the archive for your platform from the [0.3.0 release](https://github.com/cjohnhanson/zettel/releases/tag/v0.3.0). Extract it and put its `zettel` binary on your PATH. The [installation instructions](https://github.com/cjohnhanson/zettel/blob/v0.3.0/README.md#install) list other package managers.
+
+## Initialize a practice repository
+
+Create a temporary directory so the exercise does not change an existing store:
+
+```sh
+zettel_demo=$(mktemp -d)
+cd "$zettel_demo"
+git init
 zettel init
 ```
 
-The command makes the config file `zettel.yml` and the note directory
-`.zettel/`.
+Zettel prints `initialized a zettel store at <path>`. It creates `zettel.yml` and the `.zettel/` directory. Keep this terminal in the practice repository for the remaining commands.
 
-## Create a note
+## Write a note with a body
 
-```bash
-zettel note create "Connection pooling causes stale reads" \
-  -t debugging,postgres -p agent:summary
+Capture the generated ID in a shell variable:
+
+```sh
+setup_note=$(zettel note create "Zettel keeps notes beside code" \
+  -t zettel,setup -p human \
+  -b 'zettel init creates zettel.yml and a .zettel directory in the working directory.')
+printf '%s\n' "$setup_note"
+zettel note show "$setup_note"
 ```
 
-Zettel prints the note ID, for example
-`a3f2-connection-pooling-causes-stale-reads`. Most commands accept the
-4-character prefix (`a3f2`) instead of the full ID.
+The ID starts with four generated characters, followed by the title's slug. The show command prints the note's metadata and body. Open `.zettel/$setup_note.md` in your editor to inspect the same Markdown file.
 
-The `-p` flag sets the note's default provenance: who produced the text.
-An agent passes `agent:summary`, `agent:index`, or `agent:inference`. A
-person passes `human` or `human:<name>`. Without the flag the provenance is
-unknown, which is the weakest thing a later reader can be told about a span.
+The `-p human` flag describes the source of this exercise note. An agent that writes its own summary must use `agent:summary`. Provenance labels identify how text was produced; they do not establish that it is correct.
 
-Add a body on the command line:
+Find the note by tag and by body text:
 
-```bash
-zettel note create "Why we chose YAML over TOML" \
-  -t architecture \
-  -b "YAML supports anchors and aliases for config reuse. TOML can't."
+```sh
+zettel note list --tag setup
+zettel search 'zettel init'
 ```
 
-## View and search
+The list contains one note. The search result names that note and marks the match as `(body)`. If a later command reports an empty or missing ID, run `zettel note list` and use the actual ID; shell variables do not survive closing the terminal.
 
-```bash
-# List all notes
-zettel note list
+## Connect a proposed use to the finding
 
-# Filter by tag
-zettel note list --tag postgres
+Create a second sample note and mark it as an inference. This label demonstrates how to store a claim that still needs review:
 
-# Filter by provenance: human, agent, agent:inference, citation,
-# reviewed, unknown. A comma list matches any.
-zettel note list --provenance human
-zettel read --provenance human,citation,reviewed
+```sh
+use_note=$(zettel note create "Keep setup findings for the next session" \
+  -t zettel,workflow -p agent:inference -l "$setup_note" \
+  -b 'A later coding session could read these repository notes before repeating setup research.')
+printf '%s\n' "$use_note"
+zettel backlinks "$setup_note"
+```
 
-# List the notes with unreviewed agent content
+The backlinks output names the second note because it links to the first. Read the connected notes together:
+
+```sh
+zettel context "$use_note" --depth 1
+```
+
+The output includes both titles and bodies. The link is stored in the second note's `links` frontmatter field.
+
+## Inspect the inference before reusing it
+
+```sh
 zettel note list --unreviewed
-
-# Show one note
-zettel note show a3f2-connection-pooling-causes-stale-reads
-
-# Search the full text. The pattern is a regex and matches case;
-# (?i) at the front turns that off.
-zettel search "Connection pool"
-zettel search "(?i)stale reads"
-
-# Show all note content; pipe it to other tools
-zettel read
-zettel read --tag debugging
+zettel note review "$use_note"
 ```
 
-## Link notes
+The list contains the inference note. The review output shows one numbered span with `agent:inference (default)` and a text preview. If the preview ends in `…`, read the full note with `zettel note show "$use_note"` before approving it.
 
-Notes connect to each other through the `links` frontmatter field. Add a link
-when you create the note:
+Read only the human-authored content:
 
-```bash
-zettel note create "Workaround: force new connection" \
-  -t postgres \
-  -l a3f2-connection-pooling-causes-stale-reads
+```sh
+zettel read --provenance human
 ```
 
-Add a link to a note that already exists:
+This returns the setup note's text and excludes the inference. A provenance filter selects content by its label; a human must still assess the claim.
 
-```bash
-zettel note edit b7c1-workaround-force-new-connection --add-link a3f2-connection-pooling-causes-stale-reads
+If you are a human reader and accept the sample inference, approve it with your own reviewer name in place of `your-name`:
+
+```sh
+zettel note review "$use_note" --approve all --reviewer your-name
+zettel read --provenance human,reviewed
 ```
 
-## Explore the graph
+The approval prints `1 span(s) approved`. The read now includes the inference along with the setup note. Only a human runs `--approve`. An agent following this tutorial must leave the inference unapproved and continue to the next section.
 
-```bash
-# Show the notes that link to this note
-zettel backlinks a3f2-connection-pooling-causes-stale-reads
+## Keep the files for another session
 
-# Show a note and the linked notes within 2 hops
-zettel context a3f2-connection-pooling-causes-stale-reads
+Append a checkpoint to the first note:
 
-# Traverse more hops
-zettel context a3f2-connection-pooling-causes-stale-reads -d 4
-
-# Show the notes with no links
-zettel orphans
-
-# Show the knowledge base statistics
-zettel stats
+```sh
+zettel note edit "$setup_note" --append 'The practice store now has two linked notes.'
+zettel note show "$setup_note"
+zettel check
 ```
 
-## Edit and maintain
+The show output includes the appended sentence. The check prints `no problems found`. It checks store consistency, including links and provenance; it does not verify the truth of the prose.
 
-```bash
-# Change the title
-zettel note edit a3f2-connection-pooling-causes-stale-reads --title "Connection pooling and stale reads"
+Stage the configuration and notes:
 
-# Add a tag
-zettel note edit a3f2-connection-pooling-causes-stale-reads --add-tag production-incident
-
-# Append to the body
-zettel note edit a3f2-connection-pooling-causes-stale-reads --append "Confirmed: setting max_age=300 resolves this."
-
-# Delete a note
-zettel note delete a3f2-connection-pooling-causes-stale-reads
+```sh
+git add zettel.yml .zettel
+git diff --cached --stat
 ```
 
-## Mix provenance in one note
+The summary lists `zettel.yml` and two note files. If git already has your author identity configured, preserve them in a commit:
 
-A `<!-- prov ... -->` marker overrides the note default for one section:
-
-```bash
-zettel note edit a3f2 --append '<!-- prov citation:b7c1 p=12 -->
-> The pool serves a stale connection for up to max_age seconds.
-<!-- /prov -->
-
-<!-- prov agent:inference -->
-The retry storm on 2026-08-02 probably started here.
-<!-- /prov -->
-
-<!-- prov human:cody -->
-Confirmed with the infra team.
-<!-- /prov -->'
+```sh
+git commit -m "Add linked setup notes"
 ```
 
-A citation names its source: another note's ID, or a `src=<url>` attribute
-for an external source. Text outside the markers keeps the note default.
+The repository remains at `$zettel_demo`. In another terminal, change to that directory and run `zettel note list` to recover the note IDs. The records remain available without the original conversation or shell variables.
 
-## The review workflow
-
-1. Agents create notes and mark spans with their provenance.
-2. A human lists the pending work: `zettel note list --unreviewed`.
-3. `zettel note review <id>` shows the numbered spans.
-4. The human approves what they stand behind:
-   `zettel note review <id> --approve all --reviewer <name>`, or
-   `--approve 1,3` for single spans, by the numbers the listing shows.
-   The approval writes a `reviewed=` stamp.
-5. A reader pulls trusted content with
-   `zettel read --provenance human,citation,reviewed`.
-
-Only a human runs `--approve`.
-
-## Migrate from the status model
-
-Notes from before the provenance model carry a `status:` key. Convert them
-once:
-
-```bash
-zettel migrate
-```
-
-A `permanent` note becomes `provenance: human`. A `draft` note stays
-unknown. The status key is removed either way.
+Use [the explanation](what-is-zettel.md) to understand provenance and the note graph. Use [the CLI reference](cli-reference.md) for editing, deletion, migration, and sharing stores.

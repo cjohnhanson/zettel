@@ -34,11 +34,13 @@ The `provenance:` frontmatter key sets the default for the whole note. A
 `<!-- prov ... -->` marker in the body overrides it for one section, so one
 note mixes origins. A human approves agent content with
 `zettel note review`; the approval adds a `reviewed=` stamp. Only a human
-runs the review command.
+runs `--approve`. A person or agent can run `zettel note review <id>`
+without `--approve` to inspect the spans.
 
-Provenance is a label, not a lock. A later reader, usually an agent, filters
-or weighs text by it: a person's text is ground truth, a citation points at
-its source, and an unreviewed inference is one agent's guess.
+Provenance records the source and kind of a claim. A reader can filter
+content by that label, inspect a citation's source, or ask a human to review
+an agent's inference. A human label or approval does not establish that a
+claim is true; the reader must still assess its evidence.
 
 ## Composed stores
 
