@@ -128,4 +128,10 @@ git commit -m "Add linked setup notes"
 
 The repository remains at `$zettel_demo`. In another terminal, change to that directory and run `zettel note list` to recover the note IDs. The records remain available without the original conversation or shell variables.
 
+Continue with a specific task:
+
+- [Review agent notes](how-to-review-agent-notes.md) before reusing their claims.
+- [Correct a finding](how-to-correct-a-finding.md) when the evidence changes.
+- [Repair broken links](how-to-repair-broken-links.md) when a target no longer resolves.
+
 Use [the explanation](what-is-zettel.md) to understand provenance and the note graph. Use [the CLI reference](cli-reference.md) for editing, deletion, migration, and sharing stores.
