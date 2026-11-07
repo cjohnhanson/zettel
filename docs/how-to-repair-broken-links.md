@@ -57,7 +57,7 @@ If the target contains a store alias, or the finding reports an unavailable stor
 zettel store list
 ```
 
-Verify the alias in `stores.yml`, the declared path, and any required remote cache. A missing store can make valid targets unavailable. Repair the declaration or restore access before changing note IDs. The [composed-store explanation](what-is-zettel.md#composed-stores) describes the direction of these links.
+Verify the alias in `stores.yml` and the declared path. For a remote store, run `zettel store sync`. A missing store can make valid targets unavailable. Repair the declaration or restore access before changing note IDs. The [composed-store explanation](what-is-zettel.md#composed-stores) describes the direction of these links.
 
 ## Verify the repair
 

@@ -10,11 +10,11 @@ This page describes the zettel note file format.
 
 ## File name and ID
 
-Each note is one Markdown file in the flat `.zettel/` directory. The file name is `<id>.md`.
+Each note is one Markdown file in a flat directory. `zettel_dir` in `zettel.yml` names that directory, and the default is `.zettel`. The file name is `<id>.md`.
 
 An ID contains a 4-character prefix, a hyphen, and a slug of the title. The prefix uses lowercase letters and digits. An example ID is `uith-retries-stop-on-all-errors`.
 
-Commands accept a full ID or a prefix.
+Commands accept a full ID or the 4-character prefix.
 
 ## Frontmatter
 
@@ -25,7 +25,7 @@ Two `---` fences enclose the frontmatter.
 | `title` | String | Yes | Note title. |
 | `provenance` | String | No | Default provenance for unmarked body text. Without this field, that text has unknown provenance. |
 | `tags` | List of strings | No | Note tags. The default is an empty list. |
-| `links` | List of note IDs or prefixes | No | Forward links. The default is an empty list. |
+| `links` | List of note IDs or 4-character prefixes | No | Forward links. The default is an empty list. |
 | `created` | UTC timestamp | No | Creation time. Zettel fills a missing value when it writes the file. |
 | `updated` | UTC timestamp | No | Update time. Zettel fills a missing value when it writes the file. Zettel sets this value on an edit. |
 
@@ -43,6 +43,7 @@ A provenance spec has the form `origin[:qualifier] [key=value ...]`.
 
 | Origin | Qualifier | Example |
 | --- | --- | --- |
+| `human` | None | `human` |
 | `human` | Author name | `human:alex` |
 | `agent` | None | `agent` |
 | `agent` | `summary`: text derived from sources | `agent:summary` |
@@ -92,7 +93,7 @@ A reference to a note in a declared store has the form `[[alias:id]]`. A note in
 
 ## Review stamps
 
-The marker attributes `reviewed=<date> reviewer=<name>` record human approval of an agent span. Only `zettel note review --approve` writes these attributes.
+The attribute `reviewed=<date>` records human approval of an agent span. `reviewer=<name>` follows it when the command receives `--reviewer`. Only `zettel note review --approve` writes these attributes. It writes them on the span's marker, or on the frontmatter `provenance` value when the whole note has one default span.
 
 The command `zettel note review <id> --approve 1 --reviewer alex` produces this file for the example note:
 

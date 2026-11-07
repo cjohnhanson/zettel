@@ -12,7 +12,7 @@ save a finding. Keeping Markdown in the repository alone does not put
 it into a conversation.
 
 You need Zettel 0.3.1 and an agent that can run shell commands in your
-project. The [first tutorial](getting-started.md) covers installation
+project. The [tutorial](getting-started.md) covers installation
 and note creation. This guide uses your existing project.
 
 ## Open the project's store
@@ -43,9 +43,9 @@ The list can be empty in a new store. The check should report
 
 ## Add note use to the agent's project instructions
 
-Add the section below to the project instruction file the host loads.
-Keep the existing instructions. If the project has no instruction file,
-or to verify that the host loads it, follow
+Add the section below to the instruction file that your coding agent
+loads, such as `AGENTS.md`. Keep the existing instructions. If the project
+has no instruction file, or to verify that the agent loads it, follow
 [Run it on your project](https://eng.rip/docs/run-it-on-your-project/).
 
 ```markdown
@@ -65,7 +65,7 @@ conclusion. Link related notes. Leave human approval to the human.
 ```
 
 `zettel prime` prints command guidance; it does not load notes or install
-host instructions. An agent can use `zettel search 'retry|timeout'` to
+agent instructions. An agent can use `zettel search 'retry|timeout'` to
 find candidate notes, then read a returned ID with `zettel note show`.
 Use terms appropriate to the actual task.
 

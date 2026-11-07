@@ -73,7 +73,7 @@ When evidence overturns a finding or changes its scope, create a correction note
 
 2. Inspect each dependent note. Identify each conclusion that relies on the old claim.
 
-3. Create the correction note. The example uses synthetic test names. Replace the title and body with the real result. Include the test command and result, or a source citation.
+3. Create the correction note. The example uses synthetic test names. Replace the title and body with the real result. Include the test command and result, or a source citation. The example labels agent text. When a person writes the correction, replace `agent:summary` with `human:your-name` in this step and the next.
 
    ```sh
    new_note=$(zettel note create "Retry behavior differs by response" \
@@ -91,7 +91,7 @@ When evidence overturns a finding or changes its scope, create a correction note
    <!-- /prov -->"
    ```
 
-   The appended span has `agent:summary` provenance regardless of the note's default. Agent summaries remain unreviewed until a human approves them.
+   The appended span has `agent:summary` provenance regardless of the note's default. Agent summaries remain unreviewed until a human approves them. An append removes the default review stamp from a previously approved note, so its earlier text returns to the unreviewed list.
 
    Zettel has no supersession state. The `superseded` tag is a convention. Reads, searches, and provenance filters do not treat it specially. A program that reads notes must define how it handles this tag.
 

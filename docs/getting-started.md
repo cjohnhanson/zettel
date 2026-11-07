@@ -1,12 +1,12 @@
 <!-- metadata
 title: "Getting started with Zettel"
-description: "Create a repository knowledge base, link sample notes, and inspect their provenance before reuse."
+description: "Create a note store, link sample notes, and inspect their provenance before reuse."
 type: tutorial
 -->
 
 # Getting started with Zettel
 
-Create a small knowledge base with linked notes and explicit provenance. The notes in this exercise describe Zettel itself. You can inspect every claim before using it in another session.
+Create a small store of linked notes with explicit provenance. A store is a directory that holds `zettel.yml`. The notes in this exercise describe Zettel itself. You can inspect every claim before using it in another session.
 
 You need git, a bash or zsh terminal, and Zettel 0.3.1. Install the pinned version with Cargo if you have Rust 1.88 or newer and a C compiler:
 
@@ -129,7 +129,7 @@ The summary lists `zettel.yml` and two note files. If git already has your autho
 git commit -m "Add linked setup notes"
 ```
 
-The repository remains at `$zettel_demo`. In another terminal, change to that directory and run `zettel note list` to recover the note IDs. The records remain available without the original conversation or shell variables.
+The repository remains at the path that this tutorial printed. In another terminal, change to that directory and run `zettel note list` to recover the note IDs. The records remain available without the original conversation or shell variables.
 
 Continue with a specific task:
 
