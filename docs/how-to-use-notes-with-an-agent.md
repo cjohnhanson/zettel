@@ -11,7 +11,7 @@ Zettel CLI. The agent needs to know when to look for notes and when to
 save a finding. Keeping Markdown in the repository alone does not put
 it into a conversation.
 
-You need Zettel 0.3.0 and an agent that can run shell commands in your
+You need Zettel 0.3.1 and an agent that can run shell commands in your
 project. The [first tutorial](getting-started.md) covers installation
 and note creation. This guide uses your existing project.
 
@@ -43,11 +43,10 @@ The list can be empty in a new store. The check should report
 
 ## Add note use to the agent's project instructions
 
-Add the following section to the project instruction file your host
-loads. Preserve its existing instructions. The ecosystem's
-[project adoption guide](https://eng.rip/how-to-adopt-agent-work-in-a-project/)
-explains host instruction loading and how to verify it; use that guide
-if the project does not have an instruction file yet.
+Add the section below to the project instruction file the host loads.
+Keep the existing instructions. If the project has no instruction file,
+or to verify that the host loads it, follow
+[Run it on your project](https://eng.rip/docs/run-it-on-your-project/).
 
 ```markdown
 ## Project research
@@ -106,7 +105,7 @@ not establish that no relevant research exists in another store.
 ## Preserve findings for later sessions
 
 Review notes with [the agent-note review guide](how-to-review-agent-notes.md).
-When evidence changes, [record a linked correction](how-to-correct-a-finding.md).
+When evidence changes, [record a linked correction](how-to-review-agent-notes.md#correct-a-finding).
 Include `zettel.yml`, the note directory, and the project instruction
 changes in your normal Git review and commits. Another checkout needs
 those files to recover the same research.
@@ -115,3 +114,8 @@ For an agent that uses MCP instead of shell access, the
 [server reference](cli-reference.md#zettel-serve) describes the transport
 and access modes. MCP note creation records agent provenance; it does
 not expose human approval.
+
+## Next steps
+
+- When notes in one store link to notes in another repository, follow [Work across repositories](https://eng.rip/docs/work-across-repositories/).
+- Follow [Connect through MCP](https://eng.rip/docs/connect-through-mcp/) to give a Model Context Protocol client read access through `zettel serve`.

@@ -1,6 +1,6 @@
 <!-- metadata
 title: "How to review agent notes"
-description: "Inspect the full evidence for agent spans and approve only the claims a human has checked."
+description: "Inspect agent spans, approve content a human has checked, and correct a finding."
 type: how-to
 -->
 
@@ -24,7 +24,7 @@ zettel note review "$review_note"
 
 The show command prints the full body. The review command numbers its provenance spans and prints previews. A preview can end in `…`; it is not the complete evidence for approval. A person or agent can run both read commands.
 
-Follow the note's citations and links. Compare summaries with their sources. Check an inference against the relevant code, test, or observation. Leave unsupported claims unapproved. Use [the correction workflow](how-to-correct-a-finding.md) when evidence contradicts a note.
+Follow the note's citations and links. Compare summaries with their sources. Check an inference against the relevant code, test, or observation. Leave unsupported claims unapproved. When evidence contradicts a note, [correct the finding](#correct-a-finding).
 
 ## Approve the checked spans
 
@@ -57,4 +57,55 @@ zettel check
 
 The full note contains the review metadata. A partially approved note remains in the unreviewed list while it has unreviewed agent content. The filtered read includes approved content and excludes unreviewed agent spans. `zettel check` reports structural problems; it does not judge the claims.
 
-Review the Markdown diff and commit the approved note with the relevant work. A later session can read its evidence and review state from the repository. If the evidence changes, preserve the old finding and record a linked correction.
+Review the Markdown diff and commit the approved note with the relevant work. A later session can read its evidence and review state from the repository.
+
+## Correct a finding
+
+When evidence overturns a finding or changes its scope, create a correction note linked to the old note.
+
+1. Replace `a3f2-your-note-id` with the old note's ID. Read the note and its backlinks.
+
+   ```sh
+   old_note='a3f2-your-note-id'
+   zettel note show "$old_note"
+   zettel backlinks "$old_note"
+   ```
+
+2. Inspect each dependent note. Identify each conclusion that relies on the old claim.
+
+3. Create the correction note. The example uses synthetic test names. Replace the title and body with the real result. Include the test command and result, or a source citation.
+
+   ```sh
+   new_note=$(zettel note create "Retry behavior differs by response" \
+     -t correction -p agent:summary -l "$old_note" \
+     -b 'Correction to the linked finding: the synthetic retry_503 test retries a 503 response; retry_400 stops after a 400 response. The earlier statement applied one behavior to both cases.')
+   printf '%s\n' "$new_note"
+   ```
+
+4. Link the old note to the correction. Keep the old body. Append a notice with its own provenance.
+
+   ```sh
+   zettel note edit "$old_note" --add-link "$new_note" --add-tag superseded
+   zettel note edit "$old_note" --append "<!-- prov agent:summary -->
+   Correction recorded in [[$new_note]]. Read that note before reusing this finding.
+   <!-- /prov -->"
+   ```
+
+   The appended span has `agent:summary` provenance regardless of the note's default. Agent summaries remain unreviewed until a human approves them.
+
+   Zettel has no supersession state. The `superseded` tag is a convention. Reads, searches, and provenance filters do not treat it specially. A program that reads notes must define how it handles this tag.
+
+5. Update each dependent conclusion to reflect the evidence.
+
+6. Check both notes and their links.
+
+   ```sh
+   zettel note show "$old_note"
+   zettel context "$new_note" --depth 1
+   zettel backlinks "$old_note"
+   zettel check
+   ```
+
+   The context output includes both notes. The backlinks output for the old note includes the correction. `zettel check` reports structural problems. It does not judge claims.
+
+7. Review the diff. Commit both notes together with any dependent note changes. Git keeps earlier versions.

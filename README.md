@@ -31,8 +31,8 @@ On Debian or Ubuntu, download the `.deb` from the [releases
 page](https://github.com/cjohnhanson/zettel/releases) and install it:
 
 ```
-wget https://github.com/cjohnhanson/zettel/releases/download/v0.3.0/zttl_0.3.0-1_amd64.deb
-sudo dpkg -i zttl_0.3.0-1_amd64.deb
+wget https://github.com/cjohnhanson/zettel/releases/download/v0.3.1/zttl_0.3.1-1_amd64.deb
+sudo dpkg -i zttl_0.3.1-1_amd64.deb
 ```
 
 To run it once without installing anything:
@@ -61,7 +61,7 @@ cargo build --release
 ## Usage
 
 ```sh
-zettel init                                                  # run inside a git repo
+zettel init                                                  # Creates zettel.yml, .zettel/
 zettel note create "Connection pooling causes stale reads" \
   --tag bug,postgres --body "Pool reuses sockets after failover..."
 zettel note list --tag postgres
@@ -72,7 +72,7 @@ zettel context a3f2 --depth 2
 Every command:
 
 ```sh
-zettel init                                  # make .zettel/ in a git repo
+zettel init                                  # make zettel.yml and .zettel/
 zettel note create "Title" -t a,b -p agent:summary   # make a note; set tags and provenance
 zettel note list [--tag t] [--provenance p]  # list the notes
 zettel note list --unreviewed                # list the notes with unreviewed agent content

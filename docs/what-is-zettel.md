@@ -16,7 +16,8 @@ the code they explain.
 Zettel keeps all notes in one flat directory, `.zettel/`. Each note has
 frontmatter for the title, the provenance, the tags, and the links. A note
 declares a link in its frontmatter (`links: [note-id]`) or inline in its body
-(`[[note-id]]`). Zettel tracks forward links and backlinks.
+(`[[note-id]]`). Zettel tracks forward links and backlinks. The
+[note format reference](note-format.md) lists every field.
 
 ## Provenance
 

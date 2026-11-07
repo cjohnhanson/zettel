@@ -8,14 +8,14 @@ type: tutorial
 
 Create a small knowledge base with linked notes and explicit provenance. The notes in this exercise describe Zettel itself. You can inspect every claim before using it in another session.
 
-You need git, a bash or zsh terminal, and Zettel 0.3.0. Install the pinned version with Cargo if you have Rust 1.88 or newer and a C compiler:
+You need git, a bash or zsh terminal, and Zettel 0.3.1. Install the pinned version with Cargo if you have Rust 1.88 or newer and a C compiler:
 
 ```sh
-cargo install --locked zttl --version 0.3.0
+cargo install --locked zttl --version 0.3.1
 zettel --version
 ```
 
-The version command prints `zettel 0.3.0`. If you do not use Rust, download the archive for your platform from the [0.3.0 release](https://github.com/cjohnhanson/zettel/releases/tag/v0.3.0). Extract it and put its `zettel` binary on your PATH. The [installation instructions](https://github.com/cjohnhanson/zettel/blob/v0.3.0/README.md#install) list other package managers.
+The version command prints `zettel 0.3.1`. If you do not use Rust, download the archive for your platform from the [0.3.1 release](https://github.com/cjohnhanson/zettel/releases/tag/v0.3.1). Extract it and put its `zettel` binary on your PATH. The [installation instructions](https://github.com/cjohnhanson/zettel/blob/v0.3.1/README.md#install) list other package managers.
 
 ## Initialize a practice repository
 
@@ -135,8 +135,7 @@ Continue with a specific task:
 
 - [Use notes with your coding agent](how-to-use-notes-with-an-agent.md) in
   an existing project, including reads in a fresh session.
-- [Review agent notes](how-to-review-agent-notes.md) before reusing their claims.
-- [Correct a finding](how-to-correct-a-finding.md) when the evidence changes.
+- Check agent claims before reuse with [How to review agent notes](how-to-review-agent-notes.md). When evidence changes, follow its steps to correct a finding.
 - [Repair broken links](how-to-repair-broken-links.md) when a target no longer resolves.
 
 Use [the explanation](what-is-zettel.md) to understand provenance and the note graph. Use [the CLI reference](cli-reference.md) for editing, deletion, migration, and sharing stores.
