@@ -6,15 +6,18 @@ type: explanation
 
 # What is Zettel?
 
-Zettel manages a zettelkasten. It keeps the notes as markdown files with YAML
-frontmatter. Git tracks the files.
+Zettel keeps research and design decisions in linked Markdown notes. Each
+note records a finding, its sources, and how the text was produced. Links
+connect findings that belong together. Git can preserve the notes beside
+the code they explain.
 
 ## Notes and links
 
 Zettel keeps all notes in one flat directory, `.zettel/`. Each note has
 frontmatter for the title, the provenance, the tags, and the links. A note
 declares a link in its frontmatter (`links: [note-id]`) or inline in its body
-(`[[note-id]]`). Zettel tracks forward links and backlinks.
+(`[[note-id]]`). Zettel tracks forward links and backlinks. The
+[note format reference](note-format.md) lists every field.
 
 ## Provenance
 
@@ -34,11 +37,13 @@ The `provenance:` frontmatter key sets the default for the whole note. A
 `<!-- prov ... -->` marker in the body overrides it for one section, so one
 note mixes origins. A human approves agent content with
 `zettel note review`; the approval adds a `reviewed=` stamp. Only a human
-runs the review command.
+runs `--approve`. A person or agent can run `zettel note review <id>`
+without `--approve` to inspect the spans.
 
-Provenance is a label, not a lock. A later reader, usually an agent, filters
-or weighs text by it: a person's text is ground truth, a citation points at
-its source, and an unreviewed inference is one agent's guess.
+Provenance records the source and kind of a claim. A reader can filter
+content by that label, inspect a citation's source, or ask a human to review
+an agent's inference. A human label or approval does not establish that a
+claim is true; the reader must still assess its evidence.
 
 ## Composed stores
 
@@ -63,8 +68,10 @@ declare the personal knowledge base. It cannot: the target does not
 exist for the other users who clone the repository. Two repositories can
 declare each other, because each one is equally reachable.
 
-Each command runs from one store. It reads that store and the stores
-that the store declares. From the personal store, a note in a repository
+Graph queries and note lookups can follow declared stores. `zettel search`
+and `zettel read` search or read only the current store. To search a
+dependency, run the command from that store or name its root with `--root`.
+From the personal store, a note in a repository
 has the ID `project:a3f2`, and the backlinks include the personal
 annotations. From the repository, those annotations do not exist. To
 change a note in a dependency store, run the command from that store.
@@ -84,6 +91,9 @@ its own. It still matters enough to write down.
 
 Agents create notes during work and label them with their provenance. Humans
 review the agent content and approve it.
+
+[Connect the notes to your agent](how-to-use-notes-with-an-agent.md) so a
+later session knows where to look and when to record a finding.
 
 ## What it is not
 

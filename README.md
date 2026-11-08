@@ -31,8 +31,8 @@ On Debian or Ubuntu, download the `.deb` from the [releases
 page](https://github.com/cjohnhanson/zettel/releases) and install it:
 
 ```
-wget https://github.com/cjohnhanson/zettel/releases/download/v0.3.0/zttl_0.3.0-1_amd64.deb
-sudo dpkg -i zttl_0.3.0-1_amd64.deb
+wget https://github.com/cjohnhanson/zettel/releases/download/v0.3.1/zttl_0.3.1-1_amd64.deb
+sudo dpkg -i zttl_0.3.1-1_amd64.deb
 ```
 
 To run it once without installing anything:
@@ -61,7 +61,7 @@ cargo build --release
 ## Usage
 
 ```sh
-zettel init                                                  # run inside a git repo
+zettel init                                                  # make zettel.yml and .zettel/
 zettel note create "Connection pooling causes stale reads" \
   --tag bug,postgres --body "Pool reuses sockets after failover..."
 zettel note list --tag postgres
@@ -72,7 +72,7 @@ zettel context a3f2 --depth 2
 Every command:
 
 ```sh
-zettel init                                  # make .zettel/ in a git repo
+zettel init                                  # make zettel.yml and .zettel/
 zettel note create "Title" -t a,b -p agent:summary   # make a note; set tags and provenance
 zettel note list [--tag t] [--provenance p]  # list the notes
 zettel note list --unreviewed                # list the notes with unreviewed agent content
@@ -180,9 +180,10 @@ personal knowledge base. It cannot: the target does not exist for the
 other users who clone the repository. Two repositories can declare each
 other, because each one is equally reachable.
 
-Each command runs from one store. It reads that store and the stores
-that the store declares. Thus one note has different backlinks in
-different stores. Dependency stores are read-only.
+Each command runs from one store. Graph queries and note lookups also
+read the stores that the store declares. `zettel search` and
+`zettel read` use only the current store. Thus one note has different
+backlinks in different stores. Dependency stores are read-only.
 
 ## Serving over MCP
 
@@ -204,8 +205,12 @@ authenticates in front of it.
 
 ## Documentation
 
-- [What is Zettel?](docs/what-is-zettel.md) — the zettelkasten model, the note format, the workflow
+- [What is Zettel?](docs/what-is-zettel.md) — the zettelkasten model and the workflow
 - [Getting started](docs/getting-started.md) — a walkthrough of the first notes
+- [How to use project notes with a coding agent](docs/how-to-use-notes-with-an-agent.md)
+- [How to review agent notes](docs/how-to-review-agent-notes.md)
+- [How to repair broken note links](docs/how-to-repair-broken-links.md)
+- [Note format](docs/note-format.md) — every field of a note file
 - [CLI reference](docs/cli-reference.md) — the complete command documentation
 
 Run `zettel docs` to read the same documentation from the binary.
