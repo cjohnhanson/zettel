@@ -127,7 +127,9 @@ Without options: list the note's provenance spans, numbered. With
 | `--reviewer <name>` | The reviewer name to record with the approval |
 
 The approval writes `reviewed=<date>` (and `reviewer=<name>`) into the span
-marker, or into the note's default provenance spec for unmarked text.
+marker. A numbered approval of unmarked text wraps that text in a new
+marker first. `--approve all` writes the stamp into the note's default
+provenance spec for unmarked text.
 Approving a non-agent span fails. A note with no body spans approves
 through its default.
 

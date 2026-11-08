@@ -93,7 +93,7 @@ A reference to a note in a declared store has the form `[[alias:id]]`. A note in
 
 ## Review stamps
 
-The attribute `reviewed=<date>` records human approval of an agent span. `reviewer=<name>` follows it when the command receives `--reviewer`. Only `zettel note review --approve` writes these attributes. It writes them on the span's marker, or on the frontmatter `provenance` value when the whole note has one default span.
+The attribute `reviewed=<date>` records human approval of an agent span. `reviewer=<name>` follows it when the command receives `--reviewer`. Only `zettel note review --approve` writes these attributes. A numbered approval writes them on the span's marker. For unmarked text, it first wraps that text in a new marker. `--approve all` on a note with unmarked text writes them on the frontmatter `provenance` value.
 
 The command `zettel note review <id> --approve 1 --reviewer alex` produces this file for the example note:
 

@@ -91,7 +91,7 @@ When evidence overturns a finding or changes its scope, create a correction note
    <!-- /prov -->"
    ```
 
-   The appended span has `agent:summary` provenance regardless of the note's default. Agent summaries remain unreviewed until a human approves them. An append removes the default review stamp from a previously approved note, so its earlier text returns to the unreviewed list.
+   The appended span has `agent:summary` provenance regardless of the note's default. Agent summaries remain unreviewed until a human approves them. After `--approve all`, an append removes the frontmatter review stamp, so the earlier unmarked text returns to the unreviewed list. A stamp on a body marker stays.
 
    Zettel has no supersession state. The `superseded` tag is a convention. Reads, searches, and provenance filters do not treat it specially. A program that reads notes must define how it handles this tag.
 
