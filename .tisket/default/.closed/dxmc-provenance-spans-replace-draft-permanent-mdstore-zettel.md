@@ -1,12 +1,14 @@
 ---
-title: "provenance spans replace draft/permanent (mdstore + zettel)"
+title: provenance spans replace draft/permanent (mdstore + zettel)
 status: done
-priority:
-assignee:
-labels: [feature]
+priority: null
+assignee: null
+due_date: null
+labels:
+- feature
 depends_on: []
 created: 2026-08-14T15:17:17Z
-updated: "2026-08-14T19:51:46Z"
+updated: 2026-11-09T15:41:26Z
 ---
 
 ## End goal
@@ -131,3 +133,4 @@ Fixes (zettel unless noted):
 Missouri suite: 21/21 paths, 812 assertions (was 10/509). New states: cli-edges, has-marker-edge-notes, has-unclosed-span, has-bad-notes (corrupt + ambiguous-prefix fixtures), has-empty-agent-note, has-marked-no-default, has-two-agent-spans, has-citation-note, has-quoted-dangling-ref, has-unicode-provenance, has-invalid-marker. mdstore: +ends_open, 51 tests. Docs updated for citation edges, stamp invalidation, corrupt-file resilience.
 
 Everything staged in both repos, uncommitted. Pre-merge steps unchanged (drop the Cargo.toml [patch], mdstore PR first, pin rev).
+> closed in triage 2026-11-09: status was already done; shipped in PR #3 (https://github.com/cjohnhanson/zettel/pull/3), close recorded in PR #4, file never moved to .closed

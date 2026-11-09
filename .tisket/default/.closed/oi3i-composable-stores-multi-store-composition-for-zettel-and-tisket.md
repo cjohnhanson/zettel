@@ -7,8 +7,8 @@ due_date: null
 labels:
 - feature
 depends_on: []
-created: '2026-08-14T20:27:44Z'
-updated: '2026-08-14T21:32:06Z'
+created: 2026-08-14T20:27:44Z
+updated: 2026-11-09T15:41:26Z
 ---
 
 ## End goal
@@ -143,3 +143,4 @@ Delivered beyond the local-path foundation:
 - tisket: stores.yml, a `children:` field for epics with cross-repository entries, rollup with unknown-not-dropped and cache age, read-only dependency trackers, and `store list` / `store sync` / `check` (tisket had no check surface at all before).
 
 Tests: mdstore 103 unit; zettel 18 unit + missouri 23 paths / 888 assertions; tisket 9 unit + missouri 28 paths / 974 assertions. Every new behavior has missouri coverage, including the unsynced store, revision pinning, the registry override warning, and the cross-repository epic.
+> closed in triage 2026-11-09: status was already done; shipped in PR #5 (https://github.com/cjohnhanson/zettel/pull/5), close recorded in PR #8 (https://github.com/cjohnhanson/zettel/pull/8), file never moved to .closed

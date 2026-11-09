@@ -1,6 +1,6 @@
 ---
 title: batch create and keyed upsert for large loads
-status: in_progress
+status: done
 priority: '2'
 assignee: null
 due_date: null
@@ -8,7 +8,7 @@ labels:
 - feature
 depends_on: []
 created: 2026-10-10T14:26:45Z
-updated: 2026-10-10T14:46:22Z
+updated: 2026-11-09T15:41:26Z
 ---
 
 ## Problem
@@ -222,3 +222,4 @@ No change. `note create` uses the crate-private batch and keeps its output and e
 18. Stable ids across a shuffled re-run.
 19. Empty slug: `k` and eight hex digits, a valid prefix.
 20. Tags and links: a person-added tag stays; a tag the source dropped goes; a new source tag is added.
+> closed in triage 2026-11-09: keyed batch and upsert merged in PR #33 on 2026-10-10 (https://github.com/cjohnhanson/zettel/pull/33), released in 0.3.0
