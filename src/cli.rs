@@ -82,7 +82,14 @@ fn intent(command: &Command) -> Option<mdstore::resolve::Intent> {
 
 #[derive(Parser)]
 pub enum Command {
+    // Handler: run_command, Command::Init (src/cli.rs), and Repo::init
+    // (src/repo.rs).
     /// Initialize Zettel in the current directory
+    ///
+    /// Writes zettel.yml, which names .zettel as the note directory,
+    /// creates .zettel/, and prints the path of the new store. With
+    /// --root, it initializes that directory instead. The command fails
+    /// when zettel.yml already exists.
     Init,
 
     /// Write the man pages into a directory (the package build uses this)
@@ -105,40 +112,145 @@ pub enum Command {
     #[command(subcommand)]
     Note(Box<NoteCommand>),
 
+    // Handler: run_command, Command::Backlinks (src/cli.rs), and
+    // Workspace::backlinks (src/workspace.rs).
     /// Show the notes that link to a note
+    ///
+    /// A note links to another through its frontmatter links or an
+    /// inline [[id]] in its body. The command prints the ID and title of
+    /// each linking note. It also reads the stores that this store
+    /// declares, and a note from one of them prints as alias:id. JSON
+    /// output holds id, title, and store for each note.
     Backlinks(BacklinksArgs),
 
+    // Handler: run_command, Command::Orphans (src/cli.rs), and
+    // Workspace::orphans (src/workspace.rs).
     /// Show the notes with no links
+    ///
+    /// An orphan links to no note, and no note links to it. Each line
+    /// shows the ID, the default provenance, the tags, and the title, as
+    /// note list does.
     Orphans(OrphansArgs),
 
+    // Handler: run_command, Command::Search (src/cli.rs), and
+    // Repo::search (src/repo.rs).
     /// Search the notes with a regex pattern
+    ///
+    /// The pattern is matched against the title, each tag, and the body
+    /// of every note in this store. The stores that this store declares
+    /// are not searched. Each line shows the ID, the title, and the
+    /// matched fields in parentheses. JSON output adds matched_fields to
+    /// each note object of note list.
     Search(SearchArgs),
 
+    // Handler: run_command, Command::Read (src/cli.rs), and Repo::read
+    // (src/repo.rs).
     /// Show the full content of the matching notes
+    ///
+    /// Reads this store only, not the stores it declares. For each note,
+    /// the command prints a "--- <id> ---" line, then title, provenance,
+    /// created when the note has it, tags and links when there are any,
+    /// a blank line, and the body.
+    ///
+    /// With --provenance, only the matching spans print, each under a
+    /// [provenance] label. A note with no matching span is left out.
     Read(ReadArgs),
 
+    // Handler: run_command, Command::Context (src/cli.rs), and
+    // Workspace::neighborhood (src/workspace.rs).
     /// Show a note and the linked notes within N hops
+    ///
+    /// Links count in both directions: a note that links to the start
+    /// note is one hop away, as is a note the start note links to. The
+    /// walk also enters the stores that this store declares. For each
+    /// note, the command prints a "--- <id> ---" line, then title,
+    /// provenance, tags and links when there are any, and the body.
     Context(ContextArgs),
 
+    // Handler: run_command, Command::Stats (src/cli.rs), and
+    // Workspace::stats (src/workspace.rs).
     /// Show the knowledge base statistics
+    ///
+    /// Prints the note count, the span counts by origin with the count
+    /// of unreviewed agent spans, the orphan count, the count of notes
+    /// for each tag, and up to five notes with the most backlinks.
     Stats(StatsArgs),
 
-    /// Show the declared stores and what this vantage can see
+    // Handler: run_command, Command::Store, and run_store_root
+    // (src/cli.rs).
+    /// List, sync, and set the stores that zettel reads
     Store(StoreArgs),
 
+    // Handler: run_command, Command::Check (src/cli.rs), and
+    // Workspace::check (src/workspace.rs).
     /// Check the notes and the declared stores for problems
+    ///
+    /// Prints "no problems found", or a count and one line for each
+    /// finding: the source, its title, the target, and where the problem
+    /// is. Exits 1 when it finds any. The location is one of:
+    ///
+    /// frontmatter: a links entry names no note, or the file does not
+    /// parse
+    ///
+    /// body: an inline [[id]] names no note
+    ///
+    /// provenance: a provenance spec or marker is invalid
+    ///
+    /// declaration: another clone of a shared store cannot reach a
+    /// declared store, or a declared store cannot be read
+    ///
+    /// unreachable store: a declared store is not available
+    ///
+    /// shadowed citation: a citation key now reads as a reference to a
+    /// declared store
+    ///
+    /// override: a reference resolves only through a checkout that the
+    /// registry names
+    ///
+    /// scan: the scan refused to read a file
+    ///
+    /// Other commands skip a file that does not parse; check names it.
     Check,
 
+    // Handler: run_command, Command::Migrate (src/cli.rs), and
+    // Repo::migrate (src/repo.rs).
     /// Convert pre-provenance notes (status keys) to the provenance model
+    ///
+    /// Removes the status key from every note that has one. A note with
+    /// "status: permanent" and no provenance gets "provenance: human".
+    /// Any other note keeps its provenance, so a draft stays unknown.
+    /// Prints one line for each changed note, or "nothing to migrate". A
+    /// second run changes nothing.
     Migrate,
 
+    // Handler: run_command, Command::Serve (src/cli.rs), and
+    // config_from and run (src/serve.rs).
     /// Serve this knowledge base over MCP
+    ///
+    /// Without --bind, the server speaks the Model Context Protocol on
+    /// stdin and stdout, for a client that starts the process. With
+    /// --bind, it serves over HTTP at /mcp on that address, for a client
+    /// that connects: --bind 127.0.0.1:7431 serves
+    /// http://127.0.0.1:7431/mcp.
+    ///
+    /// The server stamps every note it writes as agent-written, refuses
+    /// any other provenance, and never exposes approval.
+    ///
+    /// A served store has no authentication: the server answers whoever
+    /// connects. Bind to 127.0.0.1 for a client on this machine. To serve
+    /// anyone else, put a reverse proxy that authenticates in front of
+    /// the server.
     Serve(ServeArgs),
 
     /// Read the bundled documentation
     Docs(DocsArgs),
 
+    // Handler: run_command, Command::Prime, and prime (src/cli.rs).
     /// Print what zettel is and how to use it, for an agent's context
+    ///
+    /// The output depends only on the binary version: no argument,
+    /// config, or store changes it. It says nothing about when to use
+    /// zettel; that policy belongs to the caller.
     Prime,
 }
 
@@ -152,22 +264,85 @@ static DOCS: &[(&str, &str)] = diataxis::embedded_docs!();
 
 #[derive(Parser)]
 pub enum NoteCommand {
+    // Handler: run_command, NoteCommand::Create (src/cli.rs), Batch::create
+    // and bounded_slug (src/batch.rs), and Repo::write_new_note
+    // (src/repo.rs).
     /// Create a note
+    ///
+    /// Prints the new note's ID: a random four-character prefix, a
+    /// hyphen, and a slug of the title, such as a3f2-my-first-note. A
+    /// slug longer than 100 bytes is cut at the last word that fits. The
+    /// command fails when another note already uses the slug. Later
+    /// commands accept the full ID, the prefix, or the slug. Tags and
+    /// links are stored as written.
     Create(NoteCreateArgs),
 
+    // Handler: run_command, NoteCommand::List, and print_note_list
+    // (src/cli.rs), Repo::list_notes (src/repo.rs), and matches_note
+    // (src/selector.rs).
     /// List the notes
+    ///
+    /// Each line shows the ID, the default provenance (unknown when the
+    /// note has none), the tags in brackets when there are any, and the
+    /// title.
+    ///
+    /// JSON output is an array with one object for each note: id, title,
+    /// provenance, tags, links, created, updated, body, and spans.
+    /// provenance, created, and updated are null when the note has none.
+    /// Each span holds its text, its provenance, and from_default, which
+    /// is true when the provenance comes from the note default.
     List(NoteListArgs),
 
+    // Handler: run_command, NoteCommand::Show, print_note_show, and
+    // print_note_field (src/cli.rs).
     /// Show a note
+    ///
+    /// Prints the ID, then the title, the default provenance, the tags
+    /// and links when there are any, and the body. The note can belong
+    /// to a store that this store declares; give its ID as alias:id.
+    /// JSON output is one object with the fields of a note list object.
     Show(NoteShowArgs),
 
+    // Handler: run_command, NoteCommand::Edit (src/cli.rs), and
+    // Repo::edit_note (src/repo.rs).
     /// Edit a note
+    ///
+    /// Changes only the fields that the options name, and sets the
+    /// updated timestamp. --tag replaces the tags before --add-tag and
+    /// --remove-tag apply, and --links does the same for the links.
+    ///
+    /// A --body or --append edit removes the review stamp from the
+    /// default provenance, because the stamp vouched for text that
+    /// changed. A stamp on a body marker stays. --provenance with the
+    /// same origin and qualifier keeps the stamp; a different origin or
+    /// qualifier drops it.
     Edit(NoteEditArgs),
 
+    // Handler: run_command, NoteCommand::Delete (src/cli.rs), and
+    // Repo::delete_note (src/repo.rs).
     /// Delete a note
+    ///
+    /// Removes the note file and prints "deleted" and the ID as given.
+    /// Zettel keeps no copy; restore a deleted note from git.
     Delete(NoteDeleteArgs),
 
+    // Handler: run_command, NoteCommand::Review, and span_excerpt
+    // (src/cli.rs), and Repo::approve_spans (src/repo.rs).
     /// List the provenance spans of a note, or approve agent spans
+    ///
+    /// Without --approve, prints each span with its number, its
+    /// provenance, "(default)" when the provenance comes from the note
+    /// default, and the first 60 characters of its first line. The
+    /// preview ends in "…" when it cuts the line, and counts the lines
+    /// it leaves out.
+    ///
+    /// --approve writes reviewed=<date>, and reviewer=<name> with
+    /// --reviewer, then prints the number of spans approved. A numbered
+    /// approval writes them on the span's marker, and first wraps
+    /// unmarked text in a new marker. --approve all writes them on the
+    /// default provenance for unmarked text, and on each unreviewed
+    /// agent marker. A number that names a span that is not agent
+    /// content fails. Only a human runs --approve.
     Review(NoteReviewArgs),
 }
 
@@ -224,7 +399,10 @@ pub struct NoteListArgs {
     #[arg(long)]
     pub unreviewed: bool,
 
-    /// Filter by selector (namespace:value). Repeat the option to add selectors.
+    // Handler: parse_selector and matches_note (src/selector.rs).
+    /// Filter by selector, namespace:value. The namespaces are tag,
+    /// provenance (the tokens of --provenance), and link. Repeat the
+    /// option to add selectors; a note must match every one.
     #[arg(long = "where")]
     pub r#where: Vec<String>,
 
@@ -248,7 +426,8 @@ pub struct NoteShowArgs {
     #[arg(long, default_value = "text")]
     pub format: OutputFormat,
 
-    /// Print one field value
+    // Handler: print_note_field (src/cli.rs).
+    /// Print one field value: title, provenance, tags, links, body, or id
     #[arg(long)]
     pub field: Option<String>,
 }
@@ -402,13 +581,47 @@ pub struct StoreArgs {
 
 #[derive(Parser)]
 pub enum StoreCommand {
-    /// List the stores this vantage can see
+    // Handler: run_command, StoreCommand::List (src/cli.rs), and
+    // Workspace::store_members (src/workspace.rs).
+    /// List this store and the stores it declares
+    ///
+    /// The first row is this store. Each other row shows a declared
+    /// store's alias, its source, and its note count, or why it is not
+    /// available. A remote store's row also shows the age of its cache,
+    /// and a row that the registry binds to a local checkout names that
+    /// checkout.
     List(StoreListArgs),
 
+    // Handler: run_command, StoreCommand::Sync (src/cli.rs), and
+    // Workspace::sync_all (src/workspace.rs).
     /// Fetch the declared remote stores into the local cache
+    ///
+    /// This is the only command that reaches the network. Every other
+    /// command reads what the cache already holds.
+    ///
+    /// Each store syncs on its own, and one failure never stops another.
+    /// The command prints a line for each store, then exits 1 if any
+    /// failed. A store fails when its source is unreachable, or when its
+    /// declared revision is absent from what arrived. With no remote
+    /// store declared, it prints "no remote stores declared".
+    ///
+    /// A git store keeps one bare clone for each URL, and reads its
+    /// notes at the revision that each declaration names. The fetch runs
+    /// in-process over https or git://, or from a local repository's
+    /// object database, and no git program runs. An ssh
+    /// URL is refused; declare the store with https. A blob store is an
+    /// https prefix that publishes an index.txt; sync fetches the index
+    /// and each document it names. s3:// and gs:// are refused.
     Sync,
 
+    // Handler: run_store_root (src/cli.rs).
     /// Show or set the root store that reads fall back to
+    ///
+    /// Without a path, prints the current setting and the file it came
+    /// from. With a path, writes it to ~/.config/zettel/config.yml; the
+    /// directory must hold zettel.yml. Changing a setting that is
+    /// already there needs --force. Each tool reads its own config file,
+    /// and this command writes only the file that zettel reads.
     Root(StoreRootArgs),
 }
 

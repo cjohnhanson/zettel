@@ -30,14 +30,14 @@ pages, the README and the licence. There is no Windows build.
 On Debian or Ubuntu, download the `.deb` from the [releases
 page](https://github.com/cjohnhanson/zettel/releases) and install it:
 
-```
+```sh
 wget https://github.com/cjohnhanson/zettel/releases/download/v0.3.1/zttl_0.3.1-1_amd64.deb
 sudo dpkg -i zttl_0.3.1-1_amd64.deb
 ```
 
 To run it once without installing anything:
 
-```
+```sh
 uvx zttl read
 npx @cjohnhanson/zttl read
 ```
@@ -51,7 +51,7 @@ with Rust 1.88 or newer. A C compiler is needed as well, which
 
 To build zettel:
 
-```
+```sh
 git clone https://github.com/cjohnhanson/zettel
 cd zettel
 cargo build --release
@@ -60,41 +60,45 @@ cargo build --release
 
 ## Usage
 
-```sh
-zettel init                                                  # make zettel.yml and .zettel/
-zettel note create "Connection pooling causes stale reads" \
-  --tag bug,postgres --body "Pool reuses sockets after failover..."
-zettel note list --tag postgres
-zettel search "stale read"
-zettel context a3f2 --depth 2
+Run these commands in a repository. `zettel init` makes `zettel.yml`
+and `.zettel/`. `note create` prints the new note's ID, and later
+commands accept that ID, its first four characters, or its slug:
+
+```console
+$ zettel init
+initialized a zettel store at [CWD]
+
+$ zettel note create "Connection pooling causes stale reads" --tag bug,postgres -p agent:summary --body "After failover, the pool reuses sockets bound to the old primary."
+ab12-connection-pooling-causes-stale-reads
+
+$ zettel note create "Workaround: force a new connection" --tag postgres -p human -l connection-pooling-causes-stale-reads
+cd34-workaround-force-a-new-connection
+
+$ zettel note list --tag postgres
+ab12-connection-pooling-causes-stale-reads  agent:summary  [bug, postgres]  Connection pooling causes stale reads
+cd34-workaround-force-a-new-connection  human  [postgres]  Workaround: force a new connection
+
+$ zettel search "stale read"
+ab12-connection-pooling-causes-stale-reads  Connection pooling causes stale reads  (title)
+
+$ zettel context workaround-force-a-new-connection --depth 2
+--- cd34-workaround-force-a-new-connection ---
+title: Workaround: force a new connection
+provenance: human
+tags: postgres
+links: connection-pooling-causes-stale-reads
+
+--- ab12-connection-pooling-causes-stale-reads ---
+title: Connection pooling causes stale reads
+provenance: agent:summary
+tags: bug, postgres
+
+After failover, the pool reuses sockets bound to the old primary.
+
 ```
 
-Every command:
-
-```sh
-zettel init                                  # make zettel.yml and .zettel/
-zettel note create "Title" -t a,b -p agent:summary   # make a note; set tags and provenance
-zettel note list [--tag t] [--provenance p]  # list the notes
-zettel note list --unreviewed                # list the notes with unreviewed agent content
-zettel note show <id>                        # show the full content of one note
-zettel note edit <id> --add-link b7c1        # link one note to another
-zettel note review <id> [--approve all]      # list provenance spans; approve agent content
-zettel note delete <id>                      # remove a note
-zettel read [--tag t] [--provenance p]       # show the content of the matching notes/spans
-zettel search <pattern>                      # search all notes with a regex
-zettel backlinks <id>                        # show the notes that link to this note
-zettel context <id> --depth N                # show the notes within N hops
-zettel orphans                               # show the notes with no links
-zettel store list                            # show this store and the stores it declares
-zettel store sync                            # fetch the declared remote stores into the cache
-zettel store root [<path>]                   # show or set the store that reads fall back to
-zettel check                                 # check for broken links and invalid provenance
-zettel migrate                               # convert pre-provenance notes (status keys)
-zettel stats                                 # show counts, tag distribution, and connectivity
-zettel serve [--bind ADDR] [--access MODE]   # serve this knowledge base over MCP
-zettel docs [topic]                          # show the bundled documentation
-zettel prime                                 # print what zettel is, for an agent's context
-```
+`zettel --help` lists every command. The [CLI
+reference](docs/cli-reference.md) shows the `--help` of each one.
 
 ## How it works
 
@@ -123,7 +127,7 @@ Confirmed with the infra team.
 The note ID is the filename stem, so the frontmatter does not repeat
 it. Zettel keeps the notes in one flat `.zettel/` directory:
 
-```
+```text
 .zettel/
   a3f2-connection-pooling-causes-stale-reads.md
   b7c1-workaround-force-new-connection.md
@@ -191,11 +195,11 @@ backlinks in different stores. Dependency stores are read-only.
 Protocol client. The library answers both interfaces, so the server
 returns what the CLI returns.
 
-```sh
-zettel serve                        # speak MCP on stdin and stdout
-zettel serve --bind 127.0.0.1:7431  # serve over HTTP for a client that connects
-zettel serve --access read-write    # also allow note creation
-```
+- `zettel serve` speaks MCP on stdin and stdout, for a client that
+  starts the process.
+- `zettel serve --bind 127.0.0.1:7431` serves over HTTP at
+  `http://127.0.0.1:7431/mcp`, for a client that connects.
+- `zettel serve --access read-write` also allows note creation.
 
 The server is read-only by default. With `--access read-write` it
 stamps every note it writes as agent-written. It refuses any other

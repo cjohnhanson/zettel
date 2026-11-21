@@ -38,11 +38,13 @@ pull request.
 
 ## What CI checks
 
-Three workflows check a change, and `release.yml` publishes a tag.
+Four workflows check a change, and `release.yml` publishes a tag.
 `verify` runs on every push. `gate` runs on a pull request, and `main`
 requires it. `review-gate` runs on a pull request too. It hands the
 sign-off note to `gaff reviews check` under the policy on `main`, so a
-branch cannot weaken the check that judges it.
+branch cannot weaken the check that judges it. `docs` runs on a pull
+request and on a push to `main`, and runs the checks described under
+"Docs tests".
 
 `verify` and `gate` run the commands the local git hooks run:
 
@@ -87,6 +89,54 @@ Both checks refuse a note with any of these faults:
 - fewer than three words of evidence
 
 Prose around the lines is ignored, so a note can also carry a narrative.
+
+## Docs tests
+
+`tests/docs.rs` runs every `console` block in README.md and docs/*.md
+against the built binary with trycmd. Each page runs in a scratch
+directory with its own `HOME`, a cleared environment, and a fixed git
+identity. The notes a page creates take fixed ID prefixes in order:
+`ab12`, `cd34`, `ef56`, and so on. Every `created`, `updated`, and
+`reviewed=` value in the page's notes becomes `2026-01-01`. A fence
+such as `` ```markdown {filename=".zettel/ab12-a.md"} `` is a file the
+reader writes; the test writes it before the commands that follow.
+Fixtures for a page live in `tests/docs/<page>/`.
+
+The test also compares the part of docs/cli-reference.md between its
+markers with the `--help` output of every command. Change help text in
+the doc comments in `src/cli.rs`, never in the page. To write real
+output into the pages and the reference, run one of these, then read
+the diff:
+
+```sh
+TRYCMD=overwrite cargo test --test docs
+SNAPSHOTS=overwrite cargo test --test docs
+```
+
+In README.md and docs/*.md, put every zettel command in a `console`
+block, except under Install. A `sh`, `text`, or other tagged block never
+runs. Give every fence a language: trycmd runs a fence with none.
+
+The `docs` workflow calls `.github/workflows/family-checks.yml` in the
+diataxis repository, which every tool of the eng.rip family (tundish,
+gaff, tisket, zettel, almanac, diataxis, missouri) shares. It reads
+README.md and docs/, and fails when:
+
+- `tests/docs.rs` is missing, or does not name trycmd, README.md, and
+  docs;
+- a command of any of those tools sits outside a `console` block, except
+  under Install;
+- a fence has no language, or is a `trycmd` fence;
+- the README does not open with `# zettel`, has no paragraph before its
+  first section, has no `## Install` section, or does not end with
+  `## License`;
+- a link to a file or heading in the repository is broken (a push to
+  `main` checks web links too, except the hosts in `.lycheeignore`,
+  which refuse automated requests);
+- typos finds a misspelling.
+
+The scripts and their rules are in the diataxis repository under
+`scripts/family/`; each one prints its rules with `--help`.
 
 ## Running the gates locally
 

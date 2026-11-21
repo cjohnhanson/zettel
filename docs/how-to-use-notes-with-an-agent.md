@@ -19,22 +19,30 @@ and note creation. This guide uses your existing project.
 
 In a terminal at the project root, check that the command is available:
 
-```sh
-zettel --version
+```console
+$ zettel --version
+zettel 0.3.1
+
 ```
 
 If the project already contains `zettel.yml`, keep it and its configured
 note directory. Otherwise, create the store:
 
-```sh
-zettel init
+```console
+$ zettel init
+initialized a zettel store at [CWD]
+
 ```
 
-Inspect the project's notes explicitly from this directory:
+Inspect the project's notes. `--root .` names this directory's store,
+so a command never falls back to another store:
 
-```sh
-zettel --root "$PWD" note list
-zettel --root "$PWD" check
+```console
+$ zettel --root . note list
+
+$ zettel --root . check
+no problems found
+
 ```
 
 The list can be empty in a new store. The check should report
@@ -85,10 +93,21 @@ store, read the relevant note, and compare its evidence with the current
 project before making a decision.
 
 If the store is empty, ask the agent to investigate a real project
-question and record its finding. Read the result:
+question and record its finding. The agent records it with a command
+like this one:
 
-```sh
-zettel note list --unreviewed
+```console
+$ zettel note create "Client retries stop after a 400 response" -t retry -p agent:summary -b 'src/client.rs returns the error of a 4xx response without a retry.'
+ab12-client-retries-stop-after-a-400-response
+
+```
+
+Read the result:
+
+```console
+$ zettel note list --unreviewed
+ab12-client-retries-stop-after-a-400-response  agent:summary  [retry]  Client retries stop after a 400 response
+
 ```
 
 Use the returned ID with `zettel note show ID`. Check that the note
