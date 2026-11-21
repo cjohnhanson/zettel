@@ -490,7 +490,14 @@ pub fn run(args: Args) -> crate::Result<()> {
         return run_command(&root, args.command);
     };
     let cwd = cwd_utf8()?;
-    let config = load_user_config(args.user_config.as_deref())?;
+    // A literal --root needs nothing from the user config, so the file
+    // is not read: a sandbox that denies the home directory, or an
+    // unreadable config, cannot fail a command that names its store.
+    let config = if args.root.is_some() {
+        mdstore::userconfig::UserConfig::default()
+    } else {
+        load_user_config(args.user_config.as_deref())?
+    };
     let resolved = mdstore::resolve::resolve_root(
         cwd.as_std_path(),
         args.root.as_ref().map(|r| r.as_std_path()),
