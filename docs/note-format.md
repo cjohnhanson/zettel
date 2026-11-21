@@ -25,7 +25,7 @@ Two `---` fences enclose the frontmatter.
 | `title` | String | Yes | Note title. |
 | `provenance` | String | No | Default provenance for unmarked body text. Without this field, that text has unknown provenance. |
 | `tags` | List of strings | No | Note tags. The default is an empty list. |
-| `links` | List of note IDs or 4-character prefixes | No | Forward links. The default is an empty list. |
+| `links` | List of note IDs, 4-character prefixes, slugs, or `alias:id` references | No | Forward links. The default is an empty list. |
 | `created` | UTC timestamp | No | Creation time. Zettel fills a missing value when it writes the file. |
 | `updated` | UTC timestamp | No | Update time. Zettel fills a missing value when it writes the file. Zettel sets this value on an edit. |
 

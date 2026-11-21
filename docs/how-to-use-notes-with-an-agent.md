@@ -11,7 +11,7 @@ Zettel CLI. The agent needs to know when to look for notes and when to
 save a finding. Keeping Markdown in the repository alone does not put
 it into a conversation.
 
-You need Zettel 0.3.1 and an agent that can run shell commands in your
+You need Zettel and an agent that can run shell commands in your
 project. The [tutorial](getting-started.md) covers installation
 and note creation. This guide uses your existing project.
 

@@ -13,7 +13,9 @@ pub struct Args {
     /// Store directory. Literal: the directory must hold zettel.yml;
     /// no walk, no fallback. Without it, the nearest zettel.yml at or
     /// above the cwd is used. With none, reads use the configured root
-    /// store and a write needs --home.
+    /// store and a write needs --home. For init, the directory to
+    /// initialize.
+    // Handler: run (src/cli.rs).
     #[arg(long, global = true)]
     pub root: Option<Utf8PathBuf>,
 
@@ -526,8 +528,10 @@ pub struct ReadArgs {
     #[arg(short, long)]
     pub tag: Option<String>,
 
-    /// Filter by provenance tokens, separated with commas. Only the
-    /// matching spans print, and notes with no match are omitted.
+    // Handler: Repo::read (src/repo.rs).
+    /// Filter by provenance tokens, separated with commas: human, agent,
+    /// agent:inference, citation, reviewed, unknown. Only the matching
+    /// spans print, and notes with no match are omitted.
     #[arg(short, long)]
     pub provenance: Option<String>,
 }

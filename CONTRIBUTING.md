@@ -118,8 +118,9 @@ block, except under Install. A `sh`, `text`, or other tagged block never
 runs. Give every fence a language: trycmd runs a fence with none.
 
 The `docs` workflow calls `.github/workflows/family-checks.yml` in the
-diataxis repository, which every tool of the eng.rip family (tundish,
-gaff, tisket, zettel, almanac, diataxis, missouri) shares. It reads
+[cjohnhanson/diataxis](https://github.com/cjohnhanson/diataxis)
+repository. The same docs checks run for zettel and its sibling tools:
+tundish, gaff, tisket, almanac, diataxis, and missouri. It reads
 README.md and docs/, and fails when:
 
 - `tests/docs.rs` is missing, or does not name trycmd, README.md, and

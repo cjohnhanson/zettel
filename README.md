@@ -102,18 +102,19 @@ reference](docs/cli-reference.md) shows the `--help` of each one.
 
 ## How it works
 
-Each note is one markdown file with YAML frontmatter:
+Each note is one markdown file with YAML frontmatter. This is the first
+note from Usage, with two more sections added in an editor:
 
-```markdown
+```markdown {filename=".zettel/ab12-connection-pooling-causes-stale-reads.md"}
 ---
 title: Connection pooling causes stale reads
 tags: [bug, postgres]
-links: [b7c1]
+links: [workaround-force-a-new-connection]
 provenance: agent:summary
 ---
 
 After failover, the pool reuses sockets bound to the old primary.
-See [[b7c1]] for the workaround.
+See [[workaround-force-a-new-connection]] for the workaround.
 
 <!-- prov agent:inference -->
 The 2026-08-02 retry storm probably started here.
@@ -127,10 +128,11 @@ Confirmed with the infra team.
 The note ID is the filename stem, so the frontmatter does not repeat
 it. Zettel keeps the notes in one flat `.zettel/` directory:
 
-```text
-.zettel/
-  a3f2-connection-pooling-causes-stale-reads.md
-  b7c1-workaround-force-new-connection.md
+```console
+$ ls .zettel
+ab12-connection-pooling-causes-stale-reads.md
+cd34-workaround-force-a-new-connection.md
+
 ```
 
 Notes connect through the frontmatter `links` field and inline `[[id]]`
@@ -156,11 +158,24 @@ human wrote, quoted, or vouched for. Nothing verifies a label against what
 actually wrote the span. Reading the files directly gives the same labels
 and the same caveat.
 
+`zettel note review` lists the spans of the note above, each with its
+provenance:
+
+```console
+$ zettel note review connection-pooling-causes-stale-reads
+ab12-connection-pooling-causes-stale-reads  Connection pooling causes stale reads
+
+  1  agent:summary (default)  After failover, the pool reuses sockets bound to the old pri…  (+1 more line(s))
+  2  agent:inference  The 2026-08-02 retry storm probably started here.
+  4  human:cody  Confirmed with the infra team.
+
+```
+
 ## Composed stores
 
 A knowledge base can link into others. Declare them in `stores.yml`:
 
-```yaml
+```yaml {filename="stores.yml"}
 format: 2
 stores:
   - alias: project
@@ -169,6 +184,19 @@ stores:
     git: https://example.com/org/handbook       # a git repository
   - alias: archive
     blob: https://example.com/notes             # an https prefix with an index.txt
+```
+
+`zettel store list` shows each declared store, or why it is unavailable.
+Here `../project` does not exist, and the remote stores wait for
+`zettel store sync`:
+
+```console
+$ zettel store list
+(this store)  [CWD]  2 note(s)
+project  ../project  unavailable: no directory at [CWD]/../project
+handbook  https://example.com/org/handbook  unavailable: https://example.com/org/handbook is not in the cache; run store sync
+archive  https://example.com/notes  unavailable: https://example.com/notes is not in the cache; run store sync
+
 ```
 
 `zettel store sync` fetches the remote stores into a local cache. It is

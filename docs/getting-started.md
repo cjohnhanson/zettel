@@ -8,11 +8,13 @@ type: tutorial
 
 Create a small store of linked notes with explicit provenance. A store is a directory that holds `zettel.yml`. The notes in this exercise describe Zettel itself. You can inspect every claim before using it in another session.
 
-You need git, a bash or zsh terminal, and Zettel 0.3.1. Install the pinned version with Cargo if you have Rust 1.88 or newer and a C compiler:
+You need git, a bash or zsh terminal, and Zettel. Install it with Cargo if you have Rust 1.88 or newer and a C compiler:
 
 ```sh
-cargo install --locked zttl --version 0.3.1
+cargo install --locked zttl
 ```
+
+If you do not use Rust, download the archive for your platform from the [releases page](https://github.com/cjohnhanson/zettel/releases). Extract it and put its `zettel` binary on your PATH. The [installation instructions](https://github.com/cjohnhanson/zettel#install) list other package managers.
 
 Check the binary:
 
@@ -21,8 +23,6 @@ $ zettel --version
 zettel 0.3.1
 
 ```
-
-If you do not use Rust, download the archive for your platform from the [0.3.1 release](https://github.com/cjohnhanson/zettel/releases/tag/v0.3.1). Extract it and put its `zettel` binary on your PATH. The [installation instructions](https://github.com/cjohnhanson/zettel/blob/v0.3.1/README.md#install) list other package managers.
 
 ## Initialize a practice repository
 
@@ -217,7 +217,7 @@ $ git diff --cached --stat
 
 ```
 
-The summary lists `zettel.yml` and two note files. If git already has your author identity configured, preserve them in a commit:
+The summary lists `zettel.yml` and two note files. If git already has your author identity configured, commit the files:
 
 ```console
 $ git commit -q -m "Add linked setup notes"

@@ -50,11 +50,20 @@ claim is true; the reader must still assess its evidence.
 A knowledge base can declare other knowledge bases it links into. The
 declarations live in `stores.yml`, each under a local alias:
 
-```yaml
+```yaml {filename="stores.yml"}
 format: 2
 stores:
   - alias: project
     path: ../project
+```
+
+`zettel store list` shows this store and each store it declares:
+
+```console
+$ zettel store list
+(this store)  [CWD]  0 note(s)
+project  ../project  1 note(s)
+
 ```
 
 A reference then names the store. Write `[[project:a3f2]]` in a body,

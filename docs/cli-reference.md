@@ -39,7 +39,8 @@ Commands:
 Options:
       --root <ROOT>  Store directory. Literal: the directory must hold zettel.yml; no walk, no
                      fallback. Without it, the nearest zettel.yml at or above the cwd is used.
-                     With none, reads use the configured root store and a write needs --home
+                     With none, reads use the configured root store and a write needs --home. For
+                     init, the directory to initialize
       --home         Act on the configured root store (`zettel store root`), wherever the command
                      runs
   -h, --help         Print help
@@ -61,7 +62,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -89,7 +90,8 @@ Commands:
 Options:
       --root <ROOT>  Store directory. Literal: the directory must hold zettel.yml; no walk, no
                      fallback. Without it, the nearest zettel.yml at or above the cwd is used.
-                     With none, reads use the configured root store and a write needs --home
+                     With none, reads use the configured root store and a write needs --home. For
+                     init, the directory to initialize
       --home         Act on the configured root store (`zettel store root`), wherever the command
                      runs
   -h, --help         Print help
@@ -115,7 +117,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
   -t, --tag <TAG>
           The tags; separate them with commas
@@ -156,7 +158,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
   -t, --tag <TAG>
           Filter by tag
@@ -210,7 +212,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --field <FIELD>
           Print one field value: title, provenance, tags, links, body, or id
@@ -244,7 +246,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --title <TITLE>
           The new title
@@ -301,7 +303,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -339,7 +341,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -377,7 +379,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -406,7 +408,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -441,7 +443,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -468,7 +470,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
   -t, --tag <TAG>
           Filter by tag
@@ -477,8 +479,9 @@ Options:
           Act on the configured root store (`zettel store root`), wherever the command runs
 
   -p, --provenance <PROVENANCE>
-          Filter by provenance tokens, separated with commas. Only the matching spans print, and
-          notes with no match are omitted
+          Filter by provenance tokens, separated with commas: human, agent, agent:inference,
+          citation, reviewed, unknown. Only the matching spans print, and notes with no match are
+          omitted
 
   -h, --help
           Print help (see a summary with '-h')
@@ -509,7 +512,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --format <FORMAT>
           The output format (text or json)
@@ -544,7 +547,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -569,7 +572,8 @@ Commands:
 Options:
       --root <ROOT>  Store directory. Literal: the directory must hold zettel.yml; no walk, no
                      fallback. Without it, the nearest zettel.yml at or above the cwd is used.
-                     With none, reads use the configured root store and a write needs --home
+                     With none, reads use the configured root store and a write needs --home. For
+                     init, the directory to initialize
       --home         Act on the configured root store (`zettel store root`), wherever the command
                      runs
   -h, --help         Print help
@@ -596,7 +600,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -630,7 +634,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -662,7 +666,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -704,7 +708,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -729,7 +733,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -760,7 +764,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --surfaces <SURFACES>
           The surfaces to offer, separated by commas: resources, tools. Tools are the surface
@@ -800,7 +804,8 @@ Options:
   -a, --all          Print every page whole, in one stream
       --root <ROOT>  Store directory. Literal: the directory must hold zettel.yml; no walk, no
                      fallback. Without it, the nearest zettel.yml at or above the cwd is used.
-                     With none, reads use the configured root store and a write needs --home
+                     With none, reads use the configured root store and a write needs --home. For
+                     init, the directory to initialize
       --home         Act on the configured root store (`zettel store root`), wherever the command
                      runs
   -h, --help         Print help
@@ -820,7 +825,7 @@ Options:
       --root <ROOT>
           Store directory. Literal: the directory must hold zettel.yml; no walk, no fallback.
           Without it, the nearest zettel.yml at or above the cwd is used. With none, reads use the
-          configured root store and a write needs --home
+          configured root store and a write needs --home. For init, the directory to initialize
 
       --home
           Act on the configured root store (`zettel store root`), wherever the command runs
@@ -858,7 +863,7 @@ walking or by fallback prints its source.
 `zettel store list` reads the declarations in `stores.yml` beside
 `zettel.yml`:
 
-```yaml
+```yaml {filename="stores.yml"}
 format: 2
 shared: false          # true when other people clone this store
 stores:
@@ -869,6 +874,17 @@ stores:
     rev: v1.0                  # optional; the default branch without it
   - alias: archive
     blob: https://example.com/notes    # an https prefix with an index.txt
+```
+
+`zettel store list` then shows each declared store:
+
+```console
+$ zettel store list
+(this store)  [CWD]  0 note(s)
+project  ../project  unavailable: no directory at [CWD]/../project
+handbook  https://example.com/org/handbook@v1.0  unavailable: https://example.com/org/handbook is not in the cache; run store sync
+archive  https://example.com/notes  unavailable: https://example.com/notes is not in the cache; run store sync
+
 ```
 
 A shared store declares an outside dependency by URL, because a path

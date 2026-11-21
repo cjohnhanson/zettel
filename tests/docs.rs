@@ -614,6 +614,55 @@ fn the_timestamp_rewrite_leaves_other_lines_alone() {
     run_page(&scratch, &page);
 }
 
+/// The wrapper passes the binary's exit status through: a failing
+/// command passes with `? 1` and fails the page without it.
+#[test]
+fn a_failing_command_needs_its_exit_status() {
+    if std::env::var_os("TRYCMD").is_some() {
+        return;
+    }
+    let guard = tempfile::tempdir().unwrap();
+    let scratch = guard.path().canonicalize().unwrap();
+    let marked = scratch.join("marked.md");
+    std::fs::write(
+        &marked,
+        "```console\n$ zettel init\ninitialized a zettel store at [CWD]\n\n$ zettel note create Bad -p robot\n? 1\nerror: invalid provenance: 'robot' is not an origin; use human, agent, or citation\n\n```\n",
+    )
+    .unwrap();
+    let unmarked = scratch.join("unmarked.md");
+    std::fs::write(
+        &unmarked,
+        "```console\n$ zettel init\ninitialized a zettel store at [CWD]\n\n$ zettel note create Bad -p robot\nerror: invalid provenance: 'robot' is not an origin; use human, agent, or citation\n\n```\n",
+    )
+    .unwrap();
+    run_page(&scratch, &marked);
+    assert!(std::panic::catch_unwind(|| run_page(&scratch, &unmarked)).is_err());
+}
+
+/// The registry example in docs/cli-reference.md is a file no command on
+/// the page can read, because the registry lives in the reader's home.
+/// It must parse as a registry, and bind a git URL that the page's
+/// stores.yml example declares.
+#[test]
+fn the_registry_example_parses_and_binds_a_declared_store() {
+    let page = std::fs::read_to_string(root().join("docs/cli-reference.md")).unwrap();
+    let section = &page[page.find("## The registry").expect("a registry section")..];
+    let start = section.find("```yaml\n").expect("a yaml example") + "```yaml\n".len();
+    let example = &section[start..start + section[start..].find("```").unwrap()];
+    let guard = tempfile::tempdir().unwrap();
+    let file = guard.path().join("registry.yml");
+    std::fs::write(&file, example).unwrap();
+    let registry = mdstore::registry::Registry::load_from(&file).unwrap();
+    assert_eq!(registry.stores.len(), 1, "{example}");
+    let declared = format!("git: {}\n", registry.stores[0].git);
+    let stores = &page[page.find("```yaml {filename=\"stores.yml\"}").unwrap()..];
+    let stores = &stores[..stores.find("\n```\n").unwrap()];
+    assert!(
+        stores.contains(&declared),
+        "the registry binds {declared:?}, which the stores.yml example does not declare"
+    );
+}
+
 /// The commands after a file fence are checked too: a wrong output there
 /// fails the page.
 #[test]
