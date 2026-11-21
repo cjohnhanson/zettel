@@ -2,8 +2,7 @@
 
 ## Use of AI
 
-Say in the pull request when a coding assistant wrote part of the
-change. Be able to explain the change in your own words, and write your
+Be able to explain the change in your own words, and write your
 own comments on the pull request. A pull request the author cannot
 explain is closed.
 
