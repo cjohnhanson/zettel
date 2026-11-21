@@ -1041,6 +1041,8 @@ pub struct ReadNote {
     pub provenance: String,
     pub tags: Vec<String>,
     pub links: Vec<String>,
+    /// When the note was created, as written in its frontmatter.
+    pub created: Option<String>,
     /// The spans to show. With no filter this holds one span carrying
     /// the whole body, so a reader never has to reassemble it.
     pub spans: Vec<ReadSpan>,
@@ -1111,6 +1113,7 @@ impl Repo {
                     .unwrap_or_else(|| "unknown".to_string()),
                 tags: n.frontmatter.tags,
                 links: n.frontmatter.links,
+                created: n.frontmatter.created,
                 spans,
             });
         }
@@ -1412,6 +1415,44 @@ mod tests {
             std::fs::read_to_string(base.join("secret.md")).unwrap(),
             "SECRET"
         );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A read carries each note's creation time, so text built from it
+    /// says when a note was written. A note without the field reads as
+    /// None, never as an invented time.
+    #[test]
+    fn a_read_carries_the_created_timestamp() {
+        let base = fixture("readcreated");
+        std::fs::create_dir_all(base.join("store/.zettel")).unwrap();
+        std::fs::write(base.join("store/zettel.yml"), "zettel_dir: .zettel\n").unwrap();
+        std::fs::write(
+            base.join("store/.zettel/aaaa-dated.md"),
+            "---\ntitle: Dated\ncreated: 2020-01-02T03:04:05Z\n---\n\nbody\n",
+        )
+        .unwrap();
+        std::fs::write(
+            base.join("store/.zettel/bbbb-undated.md"),
+            "---\ntitle: Undated\n---\n\nbody\n",
+        )
+        .unwrap();
+        let root = Utf8PathBuf::try_from(base.join("store")).unwrap();
+        let repo = Repo::open(&root).unwrap();
+
+        let notes = repo.read(None, None).unwrap();
+        let created = |id: &str| {
+            notes
+                .iter()
+                .find(|n| n.id == id)
+                .unwrap_or_else(|| panic!("{id} not read"))
+                .created
+                .clone()
+        };
+        assert_eq!(
+            created("aaaa-dated").as_deref(),
+            Some("2020-01-02T03:04:05Z")
+        );
+        assert_eq!(created("bbbb-undated"), None);
         let _ = std::fs::remove_dir_all(&base);
     }
 

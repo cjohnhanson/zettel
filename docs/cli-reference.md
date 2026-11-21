@@ -78,6 +78,11 @@ List the notes. The default lists all notes.
 
 Text output columns: `ID`, `PROVENANCE`, `[TAGS]`, `TITLE`.
 
+JSON output is an array with one object for each note. Each object holds
+`id`, `title`, `provenance`, `tags`, `links`, `created`, `updated`,
+`body`, and `spans`. `created` and `updated` are the frontmatter
+timestamps, or `null` when the note has none.
+
 ### `zettel note show <id>`
 
 Show the full details of a note.
@@ -89,8 +94,9 @@ Show the full details of a note.
 
 Valid `--field` values: `title`, `provenance`, `tags`, `links`, `body`, `id`.
 
-The JSON output carries a `spans` array. Each span holds its text, its
-resolved provenance, and whether the provenance comes from the note default.
+The JSON output has the same fields as one `zettel note list` object.
+Its `spans` array holds each span's text, its resolved provenance, and
+whether the provenance comes from the note default.
 
 ### `zettel note edit <id>`
 
@@ -180,7 +186,17 @@ Text output columns: `ID`, `TITLE`, `(MATCHED_FIELDS)`.
 
 ### `zettel read`
 
-Show the full content of the matching notes. Zettel prints a frontmatter summary and the body of each note.
+Show the full content of the matching notes. Zettel prints a frontmatter summary and the body of each note. The summary holds `title`, `provenance`, `created` when the note has one, `tags` when there are any, and `links` when there are any:
+
+```
+--- vfbu-attention-is-not-explanation ---
+title: Attention is not explanation
+provenance: human:cody
+created: 2026-11-21T05:15:01Z
+tags: ml
+
+Attention weights do not explain a prediction.
+```
 
 | Option | Short | Description |
 |--------|-------|-------------|
