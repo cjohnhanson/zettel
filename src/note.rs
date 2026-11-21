@@ -156,6 +156,32 @@ mod serialize_tests {
         assert_eq!(fm.provenance, None);
     }
 
+    /// A view carries both timestamps, so JSON readers can date a note
+    /// without parsing the file. A note without them gives null.
+    #[test]
+    fn a_view_carries_created_and_updated() {
+        let source = "---\ntitle: t\ncreated: 2020-01-01T00:00:00Z\nupdated: 2020-01-02T00:00:00Z\n---\n\nbody\n";
+        let (frontmatter, body) = parse_note(source).unwrap();
+        let note = Note {
+            id: "aaaa".into(),
+            frontmatter,
+            body,
+        };
+        let json = serde_json::to_value(note.view("aaaa")).unwrap();
+        assert_eq!(json["created"], "2020-01-01T00:00:00Z");
+        assert_eq!(json["updated"], "2020-01-02T00:00:00Z");
+
+        let (frontmatter, body) = parse_note("---\ntitle: t\n---\n\nbody\n").unwrap();
+        let bare = Note {
+            id: "bbbb".into(),
+            frontmatter,
+            body,
+        };
+        let json = serde_json::to_value(bare.view("bbbb")).unwrap();
+        assert!(json["created"].is_null(), "{json}");
+        assert!(json["updated"].is_null(), "{json}");
+    }
+
     #[test]
     fn body_markers_round_trip_verbatim() {
         let fm = new_frontmatter("t");
@@ -180,6 +206,11 @@ pub struct NoteView {
     pub provenance: Option<String>,
     pub tags: Vec<String>,
     pub links: Vec<String>,
+    /// When the note was created, as written in its frontmatter, or
+    /// null when the note has no `created` key.
+    pub created: Option<String>,
+    /// When the note last changed, or null when it has no `updated` key.
+    pub updated: Option<String>,
     pub body: String,
     /// The resolved spans, so a reader can weigh each piece of text by
     /// its provenance without parsing the body.
@@ -216,6 +247,8 @@ impl Note {
             provenance: self.frontmatter.provenance.clone(),
             tags: self.frontmatter.tags.clone(),
             links: self.frontmatter.links.clone(),
+            created: self.frontmatter.created.clone(),
+            updated: self.frontmatter.updated.clone(),
             body: self.body.clone(),
             spans,
         }

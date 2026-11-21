@@ -860,6 +860,9 @@ pub fn run_command(root: &camino::Utf8Path, command: Command) -> crate::Result<(
                 println!("--- {} ---", n.id);
                 println!("title: {}", n.title);
                 println!("provenance: {}", n.provenance);
+                if let Some(created) = &n.created {
+                    println!("created: {created}");
+                }
                 if !n.tags.is_empty() {
                     println!("tags: {}", n.tags.join(", "));
                 }
