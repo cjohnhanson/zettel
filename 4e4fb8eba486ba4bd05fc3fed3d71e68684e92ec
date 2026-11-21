@@ -1,1 +1,7 @@
-signoff[review-deps] PASS 4e4fb8e not applicable after looking: the diff touches only src/cli.rs and one missouri test, Cargo.toml and Cargo.lock do not change, and UserConfig::default() from locked mdstore-core 0.5.0 does no I/O and starts no process
+signoff[review-tests] PASS 4e4fb8e a mutant that skips the --root guard turned the new unreadable-config assertion red with Permission denied; the unmodified tree passes the full missouri suite, 26 passed, 0 failed, and cargo test
+signoff[review-docs] PASS 4e4fb8e swept README, CONTRIBUTING, SECURITY, docs/ including cli-reference Root resolution, and the clap help; no doc says --root reads the user config, and a built binary with a mode-000 config matches the help
+signoff[review-code] PASS 4e4fb8e resolve_root returns Via::Flag before it reads config for a named root and clap blocks --home with --root, so the default config changes only the skipped read; an invalid --user-config still fails --home and the walk
+signoff[review-deps] PASS 4e4fb8e not applicable after looking: no Cargo.toml or Cargo.lock change, UserConfig::default() from locked mdstore-core 0.5.0 does no I/O, and no process spawn is added
+signoff[review-usability] PASS 4e4fb8e built 4e4fb8e and ran note list, note create, search, check and store list with --root against chmod-000 and malformed configs, all exit 0, while the same configs without --root refuse and name the file
+
+Minor findings declined: a cli-reference sentence that --root skips the config (the --root help already states the literal contract and no doc states otherwise); an mdstore-side lazy config loader (needs a crates.io release, out of scope); splitting the assertion and cleanup after a mid-assertion failure (each path starts from a fresh temp state).
