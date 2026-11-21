@@ -29,6 +29,17 @@ assertions:
     command: "cd work/src && ! zettel --user-config ../../absent.yml note list >/dev/null 2>&1 && zettel --user-config ../../absent.yml note list 2>&1 | grep -q 'store root <path>'"
   - name: "an explicit --root never falls back"
     command: "! zettel --user-config cfg.yml --root work note list >/dev/null 2>&1"
+  - name: "an explicit --root reads and writes with the user config unreadable"
+    # The first check proves the copy is unreadable: without --root the
+    # same command fails on it. With --root, nothing reads the config.
+    command: |
+      cp cfg.yml locked.yml && chmod 000 locked.yml &&
+      (cd work/src && ! zettel --user-config ../../locked.yml note list >/dev/null 2>&1) &&
+      zettel --user-config locked.yml --root rootstore note list | grep -q 'Root note' &&
+      mkdir literal && (cd literal && zettel init >/dev/null) &&
+      zettel --user-config locked.yml --root literal note create 'Literal root' -p human:test -b 'No config.' >/dev/null &&
+      zettel --user-config locked.yml --root literal note list | grep -q 'Literal root' &&
+      rm -rf literal && chmod 600 locked.yml && rm locked.yml
   - name: "a subdirectory of a store resolves it by walking"
     command: "cd rootstore && mkdir -p src/deep && cd src/deep && zettel --user-config ../../../cfg.yml note list 2>err.txt | grep -q 'Root note' && grep -q 'using store at' err.txt && rm err.txt && cd .. && rmdir deep && cd .. && rmdir src"
   - name: "--home with no config names the fix"
