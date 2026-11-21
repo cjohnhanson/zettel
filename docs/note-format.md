@@ -12,9 +12,9 @@ This page describes the zettel note file format.
 
 Each note is one Markdown file in a flat directory. `zettel_dir` in `zettel.yml` names that directory, and the default is `.zettel`. The file name is `<id>.md`.
 
-An ID contains a 4-character prefix, a hyphen, and a slug of the title. The prefix uses lowercase letters and digits. An example ID is `uith-retries-stop-on-all-errors`.
+An ID contains a 4-character prefix, a hyphen, and a slug of the title. The prefix uses lowercase letters and digits. An example ID is `ab12-retries-stop-on-all-errors`.
 
-Commands accept a full ID or the 4-character prefix.
+Commands accept a full ID, the 4-character prefix, or the slug.
 
 ## Frontmatter
 
@@ -25,7 +25,7 @@ Two `---` fences enclose the frontmatter.
 | `title` | String | Yes | Note title. |
 | `provenance` | String | No | Default provenance for unmarked body text. Without this field, that text has unknown provenance. |
 | `tags` | List of strings | No | Note tags. The default is an empty list. |
-| `links` | List of note IDs or 4-character prefixes | No | Forward links. The default is an empty list. |
+| `links` | List of note IDs, 4-character prefixes, slugs, or `alias:id` references | No | Forward links. The default is an empty list. |
 | `created` | UTC timestamp | No | Creation time. Zettel fills a missing value when it writes the file. |
 | `updated` | UTC timestamp | No | Update time. Zettel fills a missing value when it writes the file. Zettel sets this value on an edit. |
 
@@ -57,14 +57,20 @@ The `src=` attribute holds a source URL. A citation source that resolves to a no
 
 Zettel rejects other agent qualifiers:
 
-```text
+```console
+$ zettel note create "A guess" -p agent:guess
+? 1
 error: invalid provenance: 'guess' is not an agent kind; use summary, index, or inference
+
 ```
 
 Zettel rejects other origins:
 
-```text
+```console
+$ zettel note create "A robot note" -p robot
+? 1
 error: invalid provenance: 'robot' is not an origin; use human, agent, or citation
+
 ```
 
 ## Body markers
@@ -77,7 +83,7 @@ Text outside markers takes the frontmatter default. A marked span has its own pr
 
 ```markdown
 <!-- prov agent:summary -->
-Correction recorded in [[cwt7-retry-behavior-differs-by-response]]. Read that note before reusing this finding.
+Correction recorded in [[cd34-retry-behavior-differs-by-response]]. Read that note before reusing this finding.
 <!-- /prov -->
 ```
 
@@ -95,9 +101,13 @@ A reference to a note in a declared store has the form `[[alias:id]]`. A note in
 
 The attribute `reviewed=<date>` records human approval of an agent span. `reviewer=<name>` follows it when the command receives `--reviewer`. Only `zettel note review --approve` writes these attributes. A numbered approval writes them on the span's marker. For unmarked text, it first wraps that text in a new marker. `--approve all` on a note with unmarked text writes them on the frontmatter `provenance` value.
 
-The command `zettel note review <id> --approve 1 --reviewer alex` produces this file for the example note:
+The example note `ab12-retries-stop-on-all-errors` has an unmarked inference and a marked summary. A numbered approval of span 1 produces this file:
 
-```markdown
+```console
+$ zettel note review ab12 --approve 1 --reviewer alex
+1 span(s) approved
+
+$ cat .zettel/ab12-retries-stop-on-all-errors.md
 ---
 title: Retries stop on all errors
 provenance: agent:inference
@@ -105,32 +115,39 @@ tags:
 - retry
 - superseded
 links:
-- cwt7-retry-behavior-differs-by-response
-created: 2026-11-07T20:17:49Z
-updated: 2026-11-07T20:17:49Z
+- cd34-retry-behavior-differs-by-response
+created: 2026-01-01T00:00:00Z
+updated: 2026-01-01T00:00:00Z
 ---
 
-<!-- prov agent:inference reviewed=2026-11-07 reviewer=alex -->
+<!-- prov agent:inference reviewed=2026-01-01 reviewer=alex -->
 The client stops after any failed response.
 
 <!-- /prov -->
 <!-- prov agent:summary -->
-Correction recorded in [[cwt7-retry-behavior-differs-by-response]]. Read that note before reusing this finding.
+Correction recorded in [[cd34-retry-behavior-differs-by-response]]. Read that note before reusing this finding.
 <!-- /prov -->
+
 ```
 
 The first span has human approval. Its provenance remains `agent:inference`. The second span remains unreviewed.
 
 Zettel rejects a review stamp in a `-p` spec:
 
-```text
+```console
+$ zettel note create "A stamped spec" -p "agent:summary reviewed=2026-01-01"
+? 1
 error: invalid provenance: a review stamp comes from 'note review --approve', not from a written spec
+
 ```
 
 Zettel rejects a review stamp in body text passed to a command:
 
-```text
+```console
+$ zettel note create "A stamped marker" -b "<!-- prov agent:summary reviewed=2026-01-01 -->"
+? 1
 error: invalid provenance: a review stamp comes from 'note review --approve', not from a written marker
+
 ```
 
 `zettel read --provenance human,citation,reviewed` includes human text, citations, and approved agent spans. It excludes unreviewed agent spans.

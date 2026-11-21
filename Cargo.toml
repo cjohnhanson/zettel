@@ -90,6 +90,14 @@ diataxis = { version = "0.1", default-features = false, features = ["cli"] }
 [build-dependencies]
 diataxis = { version = "0.1", default-features = false, features = ["build"] }
 
+# Run the `console` blocks of README.md and docs/*.md against the built
+# binary, and compare docs/cli-reference.md with `--help` (tests/docs.rs).
+# Test-only: the shipped crate and its consumers never compile them.
+[dev-dependencies]
+snapbox = "1.2"
+tempfile = "3"
+trycmd = "1.2"
+
 # `cargo deb` reads this. It produces target/debian/*.deb, which the
 # release attaches to the GitHub release. Installing that file is
 # `dpkg -i`, and it is not an apt repository: `apt-get install zettel`
