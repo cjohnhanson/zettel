@@ -1,0 +1,1 @@
+signoff[review-deps] PASS 4e4fb8e not applicable after looking: the diff touches only src/cli.rs and one missouri test, Cargo.toml and Cargo.lock do not change, and UserConfig::default() from locked mdstore-core 0.5.0 does no I/O and starts no process
