@@ -107,15 +107,48 @@ fn console_examples() {
     // Canonical, so a tool that prints a resolved path prints the same
     // path trycmd writes as `[CWD]`.
     let scratch = guard.path().canonicalize().unwrap();
+    run_pages(&scratch, &pages());
+}
+
+/// Run every page, then fail naming each page whose examples differ.
+fn run_pages(scratch: &Path, pages: &[PathBuf]) {
     let mut failed = Vec::new();
-    for page in pages() {
-        if std::panic::catch_unwind(|| run_page(&scratch, &page)).is_err() {
-            failed.push(page.strip_prefix(root()).unwrap().display().to_string());
+    for page in pages {
+        if std::panic::catch_unwind(|| run_page(scratch, page)).is_err() {
+            let name = page.strip_prefix(root()).unwrap_or(page);
+            failed.push(name.display().to_string());
         }
     }
     assert!(
         failed.is_empty(),
-        "examples differ from the binary in: {failed:?}"
+        "examples differ from the binary in: {failed:?}; \
+         `TRYCMD=overwrite cargo test --test docs` writes the real output, then read the diff"
+    );
+}
+
+/// One wrong page among right ones fails the run, and the failure names
+/// that page alone.
+#[test]
+fn a_wrong_page_fails_the_run_and_is_named() {
+    if std::env::var_os("TRYCMD").is_some() {
+        return;
+    }
+    let guard = tempfile::tempdir().unwrap();
+    let scratch = guard.path().canonicalize().unwrap();
+    let right = scratch.join("right.md");
+    std::fs::write(
+        &right,
+        "```console\n$ zettel init\ninitialized a zettel store at [CWD]\n\n```\n",
+    )
+    .unwrap();
+    let wrong = scratch.join("wrong.md");
+    std::fs::write(&wrong, "```console\n$ zettel init\nInitialized\n\n```\n").unwrap();
+    let pages = [right, wrong.clone()];
+    let err = std::panic::catch_unwind(|| run_pages(&scratch, &pages)).unwrap_err();
+    let message = err.downcast_ref::<String>().cloned().unwrap_or_default();
+    assert!(
+        message.contains(&format!("[{:?}]", wrong.display().to_string())),
+        "{message}"
     );
 }
 
@@ -639,10 +672,11 @@ fn a_failing_command_needs_its_exit_status() {
     assert!(std::panic::catch_unwind(|| run_page(&scratch, &unmarked)).is_err());
 }
 
-/// The registry example in docs/cli-reference.md is a file no command on
-/// the page can read, because the registry lives in the reader's home.
-/// It must parse as a registry, and bind a git URL that the page's
-/// stores.yml example declares.
+/// The registry example in docs/cli-reference.md lives in the reader's
+/// home, where a file fence cannot write, and binds a checkout under
+/// `~`, which resolves through the passwd home. So the page runs no
+/// command against it. It must parse as a registry, and bind a git URL
+/// that the page's stores.yml example declares.
 #[test]
 fn the_registry_example_parses_and_binds_a_declared_store() {
     let page = std::fs::read_to_string(root().join("docs/cli-reference.md")).unwrap();

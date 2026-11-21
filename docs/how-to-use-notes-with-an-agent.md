@@ -53,8 +53,8 @@ The list can be empty in a new store. The check should report
 
 Add the section below to the instruction file that your coding agent
 loads, such as `AGENTS.md`. Keep the existing instructions. If the project
-has no instruction file, or to verify that the agent loads it, follow
-[Run it on your project](https://eng.rip/docs/run-it-on-your-project/).
+has no instruction file, create the file that your agent's documentation
+names, at the project root.
 
 ```markdown
 ## Project research
@@ -136,5 +136,5 @@ not expose human approval.
 
 ## Next steps
 
-- When notes in one store link to notes in another repository, follow [Work across repositories](https://eng.rip/docs/work-across-repositories/).
-- Follow [Connect through MCP](https://eng.rip/docs/connect-through-mcp/) to give a Model Context Protocol client read access through `zettel serve`.
+- When notes in one store link to notes in another repository, declare that repository as described in [Composed stores](what-is-zettel.md#composed-stores) and the [store declarations reference](cli-reference.md#store-declarations).
+- To give a Model Context Protocol client read access, run `zettel serve` as the [server reference](cli-reference.md#zettel-serve) describes.

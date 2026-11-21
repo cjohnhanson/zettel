@@ -96,8 +96,9 @@ Prose around the lines is ignored, so a note can also carry a narrative.
 against the built binary with trycmd. Each page runs in a scratch
 directory with its own `HOME`, a cleared environment, and a fixed git
 identity. The notes a page creates take fixed ID prefixes in order:
-`ab12`, `cd34`, `ef56`, and so on. Every `created`, `updated`, and
-`reviewed=` value in the page's notes becomes `2026-01-01`. A fence
+`ab12`, `cd34`, `ef56`, and so on. Every `created` and `updated` value
+in the page's notes becomes `2026-01-01T00:00:00Z`, and every
+`reviewed=` date becomes `2026-01-01`. A fence
 such as `` ```markdown {filename=".zettel/ab12-a.md"} `` is a file the
 reader writes; the test writes it before the commands that follow.
 Fixtures for a page live in `tests/docs/<page>/`.

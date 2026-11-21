@@ -151,17 +151,36 @@ The origins:
 - No provenance means unknown. Unknown is never upgraded to human, so an
   agent that forgets the label cannot mint human-authored text.
 
-A human approves agent content with `zettel note review <id> --approve`,
+A human approves agent content with `zettel note review <id> --approve all`,
 which writes a `reviewed=` stamp. A later reader filters by all of this:
 `zettel read --provenance human,citation,reviewed` returns only the text a
 human wrote, quoted, or vouched for. Nothing verifies a label against what
 actually wrote the span. Reading the files directly gives the same labels
 and the same caveat.
 
-`zettel note review` lists the spans of the note above, each with its
-provenance:
+`zettel note show` prints the note above, and `zettel note review`
+lists its spans, each with its provenance:
 
 ```console
+$ zettel note show connection-pooling-causes-stale-reads
+ab12-connection-pooling-causes-stale-reads
+
+  Title:        Connection pooling causes stale reads
+  Provenance:   agent:summary
+  Tags:         bug, postgres
+  Links:        workaround-force-a-new-connection
+
+After failover, the pool reuses sockets bound to the old primary.
+See [[workaround-force-a-new-connection]] for the workaround.
+
+<!-- prov agent:inference -->
+The 2026-08-02 retry storm probably started here.
+<!-- /prov -->
+
+<!-- prov human:cody -->
+Confirmed with the infra team.
+<!-- /prov -->
+
 $ zettel note review connection-pooling-causes-stale-reads
 ab12-connection-pooling-causes-stale-reads  Connection pooling causes stale reads
 
